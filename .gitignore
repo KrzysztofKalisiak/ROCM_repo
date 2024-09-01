@@ -1,0 +1,16 @@
+*.jpg
+.venv
+__pycache__
+*.pdf
+*.dbf
+*.prj
+*.shp
+*.shx
+*.sqlite
+*.cpg
+*.zip
+*.pkl
+*.xlsx
+*.xml
+*.html
+*.txt
