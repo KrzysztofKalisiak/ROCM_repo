@@ -18,9 +18,11 @@ from PIL import Image
 
 import warnings
 
-from main import haversine_distance
+from .utils import *
 
 warnings.filterwarnings("ignore")
+
+from .config import *
 
 
 class PreMergerData:
@@ -31,7 +33,7 @@ class PreMergerData:
 
         self.settings = settings
 
-        shapefile = gpd.read_file('NUTS_RG_20M_2021_4326.shp')
+        shapefile = gpd.read_file(GLOBAL_DATA_OTH_PATH+'NUTS_RG_20M_2021_4326.shp')
         self.shapefile = shapefile.loc[shapefile['LEVL_CODE']==3][['NUTS_ID', 'geometry']]
         self.shapefile['NUTS_ID'] = self.shapefile['NUTS_ID'].apply(lambda x: '_'.join([x[:2], x[2], x[3], x[4]]))
 
@@ -121,16 +123,17 @@ class DataContainer:
             x['geometry'].x, x['geometry'].y, x['centroids'].x, x['centroids'].y), axis=1)
         
 class DataFeederOperator:
-    def __init__(self, total_images, country_selector=[]):
+    def __init__(self, total_images, country_selector=[], countries_all=[]):
         self.total_images = total_images
         self.country_selector = country_selector
+        self.countries_all = countries_all
 
-        self.country_dictionary = {y:i for i, y in enumerate(set([x.split('/')[6] for x in self.total_images['path']]))}
+        self.country_dictionary = {y:i for i, y in enumerate(self.countries_all)}
         self.country_dictionary_back = {v:k for k,v in self.country_dictionary.items()}
 
     def select_data(self):
         if self.country_selector != []:
-            self.selected_images = self.total_images.loc[self.total_images['path'].apply(lambda x: x.split('/')[6]).isin(self.country_selector)]
+            self.selected_images = self.total_images.loc[self.total_images['path'].apply(lambda x: x.rsplit('/', 3)[1]).isin(self.country_selector)]
         else:
             self.selected_images = self.total_images
         

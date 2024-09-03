@@ -1,6 +1,8 @@
 *.jpg
 .venv
 __pycache__
+_MODELS_
+_SYSTEMS_
 *.pdf
 *.dbf
 *.prj

@@ -11,8 +11,6 @@ from shapely.ops import unary_union
 import torch.optim as optim
 import tqdm
 
-import numba as nb
-
 import torch.nn as nn
 import torch
 
@@ -28,23 +26,7 @@ import cv2
 import warnings
 warnings.filterwarnings("ignore")
 
-@nb.njit()
-def haversine_distance(p1x,p1y,p2x,p2y):
-    r = 6371.001
-    p = np.radians(np.array([p1x, p1y, p2x, p2y]))
-    return 2*r*np.arcsin(np.sqrt(
-        (np.sin((p[1]-p[3])/2)**2)+(np.cos(p[1])*np.cos(p[3])*np.sin((p[0]-p[2])/2)**2)
-        ))
-@nb.njit()
-def f(pct_n, shp_n):
-
-    full_precompute = np.empty((pct_n.shape[0], shp_n.shape[0]), dtype=np.float32)
-
-    for x in np.arange(pct_n.shape[0]):
-        for y in np.arange(shp_n.shape[0]):
-            full_precompute[x, y] = haversine_distance(
-            pct_n[x, 0], pct_n[x, 1], shp_n[y, 0], shp_n[y, 1])
-    return full_precompute
+from .utils import *
 
 def get_guess_matrix(total_occurences):
     df1 = pd.DataFrame(total_occurences, columns=['true', 'pred']).groupby('true')['pred'].value_counts().unstack()
@@ -62,8 +44,6 @@ def get_guess_matrix(total_occurences):
 def get_colors(df1):
 
     def get_cmap(n, name='hsv'):
-        '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
-        RGB color; the keyword argument name must be a standard mpl colormap name.'''
         return plt.get_cmap(name, n)
     cmap = get_cmap(len(df1.index))
     colors_map = {df1.index.values[i]:cmap(i) for i in range(len(df1.index.values))}
@@ -214,12 +194,12 @@ class BRAIN:
 
             cords = list(zip(data[1][2].tolist(), data[1][3].tolist()))
 
-            ax1 = s1.plot(ax=ax[0], column='penalize', cmap='bone', edgecolors='black', legend=True)
-            ax1.scatter(cords[ind][0], cords[ind][1], edgecolors='black')
+            ax1 = s1.plot(ax=ax[0], column='penalize', cmap='bone', edgecolors='black', legend=True, linewidth=0.2)
+            ax1.scatter(cords[ind][0], cords[ind][1], edgecolors='black', linewidth=0.2)
             ax1.legend(title='Loss', fontsize=15)
 
-            ax2 = s1.plot(ax=ax[1], column='probability', cmap='OrRd', edgecolors='black', legend=True)
-            ax2.scatter(cords[ind][0], cords[ind][1], edgecolors='black')
+            ax2 = s1.plot(ax=ax[1], column='probability', cmap='OrRd', edgecolors='black', legend=True, linewidth=0.2)
+            ax2.scatter(cords[ind][0], cords[ind][1], edgecolors='black', linewidth=0.2)
             ax2.legend(title='probability', fontsize=15)
 
             results.append(fig)
