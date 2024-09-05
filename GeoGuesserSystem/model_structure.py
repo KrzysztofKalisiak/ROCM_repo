@@ -60,10 +60,6 @@ class GeoBrainNetwork(nn.Module):
     
 def model_loader(model_id):
 
-    if GLOBAL_MODELS_PATH+model_id+'.pt' in glob.glob(GLOBAL_MODELS_PATH+'*.pt'):
-
-        return torch.load(GLOBAL_MODELS_PATH+model_id+'.pt')
-
     model_conf = model_configs[model_id]
 
     baseline_model, _, _ = open_clip.create_model_and_transforms(model_conf['basemodel'], device=DEVICE)
@@ -76,9 +72,15 @@ def model_loader(model_id):
     
     ModelBarebone._freeze_barebone_paremeters()
 
-    torch.save(ModelBarebone, GLOBAL_MODELS_PATH+model_id+'.pt')
+    Optimizer = model_conf['optimizer'](ModelBarebone.parameters(), **model_conf['optimizer_params'])
 
-    return ModelBarebone
+    if GLOBAL_MODELS_PATH+model_id+'.pt' in glob.glob(GLOBAL_MODELS_PATH+'*.pt'):
+
+        checkpoint = torch.load(GLOBAL_MODELS_PATH+model_id+'.pt', weights_only=True)
+        ModelBarebone.load_state_dict(checkpoint['model_state_dict'])
+        Optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    return ModelBarebone, Optimizer
 
 def system_loader(force_override=False):
 
@@ -92,7 +94,7 @@ def system_loader(force_override=False):
 
     train_dataloader, test_dataloader, pct_n, shp_n, pct, shp, countries = process_data()
 
-    model = model_loader(system_configs[SYSTEM_ID]['model_ID'])
+    model, optimizer = model_loader(system_configs[SYSTEM_ID]['model_ID'])
 
     BR = BRAIN()
     BR.NN = model
@@ -105,18 +107,18 @@ def system_loader(force_override=False):
     BR.shp_n = shp_n
     BR.shp = shp
     BR.device = DEVICE
+    BR.optimizer = optimizer
 
     BR.prepare_system(list(countries))
-
-    with open(GLOBAL_SYSTEMS_PATH+SYSTEM_ID+'.pkl', 'wb') as f:
-
-        pickle.dump(BR, f)
 
     return BR
 
 def save_system(BR):
 
-    torch.save(BR.NN, GLOBAL_MODELS_PATH+system_configs[SYSTEM_ID]['model_ID']+'.pt')
+    torch.save({
+            'model_state_dict': BR.NN.state_dict(),
+            'optimizer_state_dict': BR.optimizer.state_dict(),
+            }, GLOBAL_MODELS_PATH+system_configs[SYSTEM_ID]['model_ID']+'.pt')
 
     with open(GLOBAL_SYSTEMS_PATH+SYSTEM_ID+'.pkl', 'wb') as f:
 

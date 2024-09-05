@@ -108,6 +108,7 @@ class BRAIN:
         self.shp_n = None
         self.shp = None
         self.device = None
+        self.optimizer = None
 
     def prepare_system(self, countries=['AL']):
         
@@ -119,6 +120,15 @@ class BRAIN:
         self.selected_indexes = torch.Tensor(self.select_indexes).to(torch.int32)
 
         self.NN.to(self.device)
+    
+    def real_output_extract(self, data):
+        
+        # geolocation
+        true_id_haversine = self.full_precompute[data[1][0], :][:, self.selected_indexes]
+        real_y = torch.exp(-(true_id_haversine - (data[1][1][:, None]))/self.tau).to(self.device)
+
+        # temperature
+
 
     def train(self, epochs=1):
 
@@ -126,7 +136,7 @@ class BRAIN:
 
             running_loss = 0.0
             for i, data in tqdm.tqdm(enumerate(self.train_dataloader, 0), total=self.train_dataloader.__len__()):
-                # get the inputs; data is a list of [inputs, labels]
+
                 inputs = data[0].to(self.device)
 
                 true_id_haversine = self.full_precompute[data[1][0], :][:, self.selected_indexes]
@@ -134,10 +144,11 @@ class BRAIN:
 
                 self.optimizer.zero_grad()
 
-                outputs = self.NN(inputs)
-                loss = self.criterion(outputs, y)
-                if torch.isnan(loss):
-                    break
+                network_output = self.NN(inputs)
+                
+                loss = self.loss_calculator(network_output, true_y=y)
+                
+
                 loss.backward()
                 self.optimizer.step()
 
@@ -145,12 +156,11 @@ class BRAIN:
                 
             print(running_loss)
     
-    def test_main(self, if_plot_predicted_point):
+    def generate_test_main(self):
         self.total_occurences = []
         self.cords_list = []
 
         for i, data in tqdm.tqdm(enumerate(self.test_dataloader, 0), total=self.test_dataloader.__len__()):
-            # get the inputs; data is a list of [inputs, labels]
             inputs = data[0].to(self.device)
             true_labels_name= data[1][4]
 
@@ -163,9 +173,35 @@ class BRAIN:
             cords = list(zip(data[1][2].tolist(), data[1][3].tolist()))
             self.cords_list += cords
 
+    def metrics_and_plots(self, level=1, if_plot_predicted_point=True):
+        occurences2, colors2, shp2, df12 = precision_level_set(self.total_occurences, self.shp, level)
+        
+        cross_table = pd.DataFrame(occurences2).groupby(0)[1].value_counts().unstack(-1).fillna(0)
+        cross_table = cross_table.reindex(cross_table.index, axis=1).fillna(0)
+
+        self.metrics = {}
+
+        for i in cross_table.columns:
+            b = cross_table.copy()
+            b.columns = [i if x==i else "Z_Oth" for x in b.columns]
+            b.index = [i if x==i else "Z_Oth" for x in b.index]
+            
+            b = b.stack().groupby(level=[0, 1]).sum().sort_index().unstack(-1)
+            
+            b.index.name = 'real'
+            b.columns.name = 'pred'
+            
+            acc = (b.values[0, 0] + b.values[1, 1])/np.sum(b.values)
+            
+            recall = (b.values[0, 0]) / (b.values[0, 0]+b.values[0, 1])
+            
+            total_shots = b.values[:, 0].sum()
+            total_real = b.values[0, :].sum()
+            
+            self.metrics[i] = [acc, recall, total_shots, total_real]
+
         if if_plot_predicted_point:
             
-            occurences2, colors2, shp2, df12 = precision_level_set(self.total_occurences, self.shp, 4)
             plot_predicted_points(shp2, colors2, occurences2, df12, self.cords_list);
 
     def asses_photos(self, data):
