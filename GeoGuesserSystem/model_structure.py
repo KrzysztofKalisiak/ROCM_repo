@@ -35,13 +35,19 @@ class GeoBrainNetwork(nn.Module):
         self.barebone_model = barebone_model
         self.barebone_unfreeze_config = barebone_unfreeze_config
 
-        self.mods = [[nn.ModuleList(y) for y in x] for x in model_elements]
+        self.mods = nn.ModuleList([nn.ModuleList([nn.ModuleList(y) for y in x]) for x in model_elements])
 
         self.preprocess_func = preprocess_func
 
         self.target_outputs = target_outputs
 
+        #for key, value in self.target_outputs.items():
+        #    self.target_outputs[key] = self.target_outputs[key].to('cuda')
+
         self.reductions = reductions
+
+        #for key, value in self.reductions.items():
+        #    self.reductions[key] = self.reductions[key].to('cuda')
 
     def _freeze_barebone_paremeters(self):
 
@@ -68,13 +74,14 @@ class GeoBrainNetwork(nn.Module):
 
             concurrent_res = []
             for ci, concurrent_step in enumerate(deep_step):
+                x_ = torch.clone(x)
                 for mod in concurrent_step:
-                    x = mod(x)
+                    x_ = mod(x_)
                 if save:
-                    if self.target_outputs[ci]:
-                        outputs[i].append(x)
-                concurrent_res.append(x)
-            x = self.reductions[i](concurrent_res)
+                    if self.target_outputs[i][ci]:
+                        outputs[i].append(x_)
+                concurrent_res.append(x_)
+            x = self.reductions[i](concurrent_res, 1)
 
         return outputs
     
@@ -87,7 +94,9 @@ def model_loader(model_id):
     ModelBarebone = GeoBrainNetwork(baseline_model.visual, 
                                     model_conf['unfreeze_basemodel_params_conf'],
                                     model_conf['geolocation_model_extension'],
-                                    model_conf['preprocess']
+                                    model_conf['preprocess'],
+                                    model_conf['target_outputs'],
+                                    model_conf['concurrent_reduction']
                                     )
     
     ModelBarebone._freeze_barebone_paremeters()
@@ -117,7 +126,7 @@ def system_loader(force_override=False):
     model, optimizer = model_loader(system_configs[SYSTEM_ID]['model_ID'])
 
     BR = BRAIN()
-    BR.NN = model
+    BR.NN = model.to(DEVICE)
     BR.train_dataloader = train_dataloader
     BR.test_dataloader = test_dataloader
     BR.loss = system_conf['auxiliary_loss']

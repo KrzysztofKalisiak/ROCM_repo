@@ -5,8 +5,8 @@ from .utils import *
 
 import torch.optim as optim
 
-def first(l):
-    return l[0]
+def first(l, _):
+    return l[0].to('cuda')
 
 model_configs = {
 
@@ -49,7 +49,7 @@ system_configs = {
 
     'SYS1':{
         "auxiliary_loss":{
-                          1:[None, nn.MSELoss, nn.MSELoss, nn.MSELoss, nn.MSELoss, nn.MSELoss, nn.MSELoss], 
+                          1:[nn.MSELoss, nn.MSELoss, nn.MSELoss, nn.MSELoss, nn.MSELoss, nn.MSELoss], 
                           2:[HaversineLoss]
                         },
         "tau":100,

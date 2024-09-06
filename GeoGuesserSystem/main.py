@@ -132,7 +132,7 @@ class BRAIN:
         real_output[2] = [real_y]
 
         # level2 meteo data
-        real_output[1] = data[5]
+        real_output[1] = data[5].to(self.device)
 
         return real_output
 
