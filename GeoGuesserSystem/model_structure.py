@@ -27,15 +27,21 @@ class GeoBrainNetwork(nn.Module):
                  barebone_model=EmptyModel(),
                  barebone_unfreeze_config=slice(0,0),
                  model_elements=[],
-                 preprocess_func=lambda x: x):
+                 preprocess_func=lambda x: x,
+                 target_outputs = {},
+                 reductions = {}):
         super().__init__()
 
         self.barebone_model = barebone_model
         self.barebone_unfreeze_config = barebone_unfreeze_config
 
-        self.mods = nn.ModuleList(model_elements)
+        self.mods = [[nn.ModuleList(y) for y in x] for x in model_elements]
 
         self.preprocess_func = preprocess_func
+
+        self.target_outputs = target_outputs
+
+        self.reductions = reductions
 
     def _freeze_barebone_paremeters(self):
 
@@ -50,13 +56,27 @@ class GeoBrainNetwork(nn.Module):
         x = self.preprocess_func(x)
         x = self.barebone_model(x)
 
-        if type(x) is tuple:
-            x = x[0]
+        outputs = {}
 
-        for m in self.mods:
-            x = m(x)
+        for i, deep_step in enumerate(self.mods):
 
-        return x
+            if i in self.target_outputs:
+                outputs[i] = []
+                save = True
+            else:
+                save=False
+
+            concurrent_res = []
+            for ci, concurrent_step in enumerate(deep_step):
+                for mod in concurrent_step:
+                    x = mod(x)
+                if save:
+                    if self.target_outputs[ci]:
+                        outputs[i].append(x)
+                concurrent_res.append(x)
+            x = self.reductions[i](concurrent_res)
+
+        return outputs
     
 def model_loader(model_id):
 
@@ -100,7 +120,7 @@ def system_loader(force_override=False):
     BR.NN = model
     BR.train_dataloader = train_dataloader
     BR.test_dataloader = test_dataloader
-    BR.loss_function = system_conf['geo_loss_func']
+    BR.loss = system_conf['auxiliary_loss']
     BR.tau = system_conf['tau']
     BR.pct_n = pct_n
     BR.pct = pct

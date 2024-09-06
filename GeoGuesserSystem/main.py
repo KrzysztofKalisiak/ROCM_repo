@@ -101,7 +101,7 @@ class BRAIN:
         self.NN = None
         self.train_dataloader = None
         self.test_dataloader = None
-        self.loss_function = None
+        self.loss = None
         self.tau = None
         self.pct_n = None
         self.pct = None
@@ -113,7 +113,7 @@ class BRAIN:
     def prepare_system(self, countries=['AL']):
         
         self.full_precompute = torch.tensor(f(self.pct_n, self.shp_n)).to(torch.float64)
-        self.criterion = self.loss_function
+        self.criterions = self.loss
         self.optimizer = optim.Adam(self.NN.parameters(), lr=0.001)
 
         self.select_indexes = np.arange(self.shp.index.shape[0])[self.shp.index.str.startswith(tuple(countries))]
@@ -122,13 +122,30 @@ class BRAIN:
         self.NN.to(self.device)
     
     def real_output_extract(self, data):
+
+        real_output = {}
         
-        # geolocation
-        true_id_haversine = self.full_precompute[data[1][0], :][:, self.selected_indexes]
-        real_y = torch.exp(-(true_id_haversine - (data[1][1][:, None]))/self.tau).to(self.device)
+        # level2 geolocation
+        true_id_haversine = self.full_precompute[data[0], :][:, self.selected_indexes]
+        real_y = torch.exp(-(true_id_haversine - (data[1][:, None]))/self.tau).to(self.device)
 
-        # temperature
+        real_output[2] = [real_y]
 
+        # level2 meteo data
+        real_output[1] = data[5]
+
+        return real_output
+
+    def loss_calculator(self, model, real):
+
+        loss = 0
+        for auxiliary_level in model:
+
+            loss += sum([
+                x(model[auxiliary_level][i], real[auxiliary_level][i]) 
+                for i, x in enumerate(self.criterions[auxiliary_level])])
+
+        return loss
 
     def train(self, epochs=1):
 
@@ -139,16 +156,12 @@ class BRAIN:
 
                 inputs = data[0].to(self.device)
 
-                true_id_haversine = self.full_precompute[data[1][0], :][:, self.selected_indexes]
-                y = torch.exp(-(true_id_haversine - (data[1][1][:, None]))/self.tau).to(self.device)
-
+                real_y = self.real_output_extract(data[1])
+                network_output_y = self.NN(inputs)
+                
                 self.optimizer.zero_grad()
 
-                network_output = self.NN(inputs)
-                
-                loss = self.loss_calculator(network_output, true_y=y)
-                
-
+                loss = self.loss_calculator(network_output_y, real_y)
                 loss.backward()
                 self.optimizer.step()
 

@@ -149,6 +149,8 @@ class GeoBrainDataset(Dataset):
         self.target_transform = target_transform
         self.id_translator = self.img_dir.index.values
 
+        self.meteo_data = pd.read_csv('DATA_OTHER/meteorological.csv')
+
     def __len__(self):
         return len(self.img_dir)
 
@@ -167,4 +169,6 @@ class GeoBrainDataset(Dataset):
         if self.transform is not None:
           image = self.transform(image)
 
-        return image, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'])
+        oth_data_meteo = self.meteo_data.loc[idx].values # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
+
+        return image, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'], oth_data_meteo)
