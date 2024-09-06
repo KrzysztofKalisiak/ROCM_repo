@@ -49,7 +49,7 @@ system_configs = {
 
     'SYS1':{
         "auxiliary_loss":{
-                          1:[nn.MSELoss, nn.MSELoss, nn.MSELoss, nn.MSELoss, nn.MSELoss, nn.MSELoss], 
+                          1:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
                           2:[HaversineLoss]
                         },
         "tau":100,

@@ -132,7 +132,7 @@ class BRAIN:
         real_output[2] = [real_y]
 
         # level2 meteo data
-        real_output[1] = data[5].to(self.device)
+        real_output[1] = data[5]
 
         return real_output
 
@@ -141,9 +141,20 @@ class BRAIN:
         loss = 0
         for auxiliary_level in model:
 
-            loss += sum([
-                x(model[auxiliary_level][i], real[auxiliary_level][i]) 
-                for i, x in enumerate(self.criterions[auxiliary_level])])
+            for i, x in enumerate(self.criterions[auxiliary_level]):
+
+                #print(real[auxiliary_level])
+
+                try:
+                    loss += x(model[auxiliary_level][i], real[auxiliary_level][i])
+                except:
+                    print(model[auxiliary_level][i])
+                    print(real[auxiliary_level][i])
+                    raise Exception
+
+            #loss += sum([
+            #    x(model[auxiliary_level][i], real[auxiliary_level][i]) 
+            #    for i, x in enumerate(self.criterions[auxiliary_level])])
 
         return loss
 

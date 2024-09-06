@@ -169,6 +169,6 @@ class GeoBrainDataset(Dataset):
         if self.transform is not None:
           image = self.transform(image)
 
-        oth_data_meteo = self.meteo_data.loc[idx].values # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
+        oth_data_meteo = torch.Tensor(self.meteo_data.loc[idx].values).to('cuda') # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
 
         return image, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'], oth_data_meteo)
