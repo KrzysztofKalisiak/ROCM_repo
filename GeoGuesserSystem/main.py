@@ -126,7 +126,7 @@ class BRAIN:
         real_output = {}
         
         # level2 geolocation
-        true_id_haversine = self.full_precompute[data[0], :][:, self.selected_indexes]
+        true_id_haversine = self.full_precompute[data[0], :][:, self.selected_indexes.long()]
         real_y = torch.exp(-(true_id_haversine - (data[1][:, None]))/self.tau).to(self.device)
 
         real_output[2] = [real_y]
@@ -141,7 +141,7 @@ class BRAIN:
         loss = 0
         for auxiliary_level in model:
 
-            for i, x in enumerate(self.criterions[auxiliary_level]):
+            '''for i, x in enumerate(self.criterions[auxiliary_level]):
 
                 #print(real[auxiliary_level])
 
@@ -150,11 +150,11 @@ class BRAIN:
                 except:
                     print(model[auxiliary_level][i])
                     print(real[auxiliary_level][i])
-                    raise Exception
+                    raise Exception'''
 
-            #loss += sum([
-            #    x(model[auxiliary_level][i], real[auxiliary_level][i]) 
-            #    for i, x in enumerate(self.criterions[auxiliary_level])])
+            loss += sum([
+                x(model[auxiliary_level][i], real[auxiliary_level][i]) 
+                for i, x in enumerate(self.criterions[auxiliary_level])])
 
         return loss
 
