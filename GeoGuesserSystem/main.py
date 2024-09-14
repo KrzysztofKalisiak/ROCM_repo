@@ -114,7 +114,6 @@ class BRAIN:
         
         self.full_precompute = torch.tensor(f(self.pct_n, self.shp_n)).to(torch.float64)
         self.criterions = self.loss
-        self.optimizer = optim.Adam(self.NN.parameters(), lr=0.001)
 
         self.select_indexes = np.arange(self.shp.index.shape[0])[self.shp.index.str.startswith(tuple(countries))]
         self.selected_indexes = torch.Tensor(self.select_indexes).to(torch.int32)
@@ -131,8 +130,9 @@ class BRAIN:
 
         real_output[2] = [real_y]
 
-        # level2 meteo data
+        # level2 meteo+gdp data
         real_output[1] = data[5]
+
 
         return real_output
 
@@ -156,10 +156,10 @@ class BRAIN:
 
     def train(self, epochs=1):
 
-        for epoch in range(epochs):  # loop over the dataset multiple times
+        for epoch in (pbar := tqdm.tqdm(range(epochs))):  # loop over the dataset multiple times
 
             running_loss = 0.0
-            for i, data in tqdm.tqdm(enumerate(self.train_dataloader, 0), total=self.train_dataloader.__len__()):
+            for i, data in tqdm.tqdm(enumerate(self.train_dataloader, 0), total=self.train_dataloader.__len__(), leave=False):
 
                 inputs = data[0].to(self.device)
 
@@ -173,8 +173,8 @@ class BRAIN:
                 self.optimizer.step()
 
                 running_loss += loss.item()
-                
-            print(running_loss)
+
+            pbar.set_description("Loss: "+str(running_loss))
     
     def generate_test_main(self):
         self.total_occurences = []

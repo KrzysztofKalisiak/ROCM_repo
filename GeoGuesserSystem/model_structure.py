@@ -52,16 +52,22 @@ class GeoBrainNetwork(nn.Module):
                 param.requires_grad = False
         
     def forward(self, x, mode='location_only'):
+
+        if x.dim() in [4, 5]: # on picture itself
         
-        if x.dim() == 5: # panorama
+            if x.dim() == 5: # panorama
 
-            x_ = torch.stack([self.barebone_model(self.preprocess_func(x[:, :, :, :, ij])) for ij in range(x.shape[4])])
-            x = torch.mean(x_, dim=0)
+                x_ = torch.stack([self.barebone_model(self.preprocess_func(x[:, :, :, :, ij])) for ij in range(x.shape[4])])
+                x = torch.mean(x_, dim=0)
 
-        else: # no panorama
-            
-            x = self.preprocess_func(x)
-            x = self.barebone_model(x)
+            else: # no panorama
+                
+                x = self.preprocess_func(x)
+                x = self.barebone_model(x)
+        else: # on embedding
+
+            if x.dim() == 3: # panorama
+                x = torch.mean(x, dim=0)
 
         outputs = {}
 
@@ -93,9 +99,14 @@ def model_loader(model_id):
 
     model_conf = model_configs[model_id]
 
-    baseline_model, _, _ = open_clip.create_model_and_transforms(model_conf['basemodel'], device=DEVICE)
+    
+    if model_conf['basemodel'] is not None:
+        baseline_model, _, _ = open_clip.create_model_and_transforms(model_conf['basemodel'], device=DEVICE)
+        baseline_model = baseline_model.visual
+    else:
+        baseline_model=None
 
-    ModelBarebone = GeoBrainNetwork(baseline_model.visual, 
+    ModelBarebone = GeoBrainNetwork(baseline_model, 
                                     model_conf['unfreeze_basemodel_params_conf'],
                                     model_conf['geolocation_model_extension'],
                                     model_conf['preprocess'],
@@ -103,7 +114,8 @@ def model_loader(model_id):
                                     model_conf['concurrent_reduction']
                                     )
     
-    ModelBarebone._freeze_barebone_paremeters()
+    if model_conf['basemodel'] is not None:
+        ModelBarebone._freeze_barebone_paremeters()
 
     Optimizer = model_conf['optimizer'](ModelBarebone.parameters(), **model_conf['optimizer_params'])
 
@@ -125,7 +137,13 @@ def system_loader(force_override=False):
 
     system_conf = system_configs[SYSTEM_ID]
 
-    train_dataloader, test_dataloader, pct_n, shp_n, pct, shp, countries = process_data()
+    if system_conf['predefined_region_grid'] is not None:
+        premerged_shapes = gpd.read_file('predefined_region_grids/%s' % system_conf['predefined_region_grid']).set_index('NUTS_ID_ne')
+    else:
+        premerged_shapes = None
+
+
+    train_dataloader, test_dataloader, pct_n, shp_n, pct, shp, countries = process_data(premerged_shapes, system_conf['on_embeddings'])
 
     model, optimizer = model_loader(system_configs[SYSTEM_ID]['model_ID'])
 

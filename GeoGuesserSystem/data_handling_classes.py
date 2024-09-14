@@ -88,15 +88,15 @@ class PreMergerData:
 
                     y.loc[y['NUTS_ID']==xx, 'add_cat2'] = x[0]+str(i)
 
-            y['NUTS_ID_new'] = y.apply(lambda x: x['add_cat2'] if x['add_cat2'] != 'nan' else x['NUTS_ID'], axis=1)
+            y['NUTS_ID_ne'] = y.apply(lambda x: x['add_cat2'] if x['add_cat2'] != 'nan' else x['NUTS_ID'], axis=1)
             y = y.drop(columns = ['add_cat2'])
 
             total_c = pd.concat([total_c, y])
 
-        x3 = self.shapefile.join(total_c[['NUTS_ID', 'NUTS_ID_new']].drop_duplicates().set_index('NUTS_ID'), on='NUTS_ID', rsuffix='_points')
-        self.premerged_shapes = x3.groupby('NUTS_ID_new')['geometry'].apply(lambda x: unary_union(x))
+        x3 = self.shapefile.join(total_c[['NUTS_ID', 'NUTS_ID_ne']].drop_duplicates().set_index('NUTS_ID'), on='NUTS_ID', rsuffix='_points')
+        self.premerged_shapes = x3.groupby('NUTS_ID_ne')['geometry'].apply(lambda x: unary_union(x))
         self.premerged_shapes.crs = "EPSG:4326"
-        self.premerged_shapes = self.premerged_shapes.reset_index().set_index('NUTS_ID_new')
+        self.premerged_shapes = gpd.GeoDataFrame(self.premerged_shapes.reset_index().set_index('NUTS_ID_ne'), crs='EPSG:4326')
 
 class DataContainer:
     def __init__(self, polygons, full_pictures_path, countries):
@@ -113,10 +113,10 @@ class DataContainer:
             y = [[x, Point(list(map(float, x.rsplit('/', 1)[1].rsplit('|', 3)[0].split('|'))))] for x in glob.glob(self.full_pictures_path+'/%s/*.jpg' % c)]
             y = gpd.GeoDataFrame(y).rename(columns={0:'path', 1:'geometry'})
             y = y.set_geometry('geometry', crs='EPSG:4326')
-            y = gpd.sjoin(y, gpd.GeoDataFrame(self.polygons, crs='EPSG:4326').reset_index())
-            self.pictures_total.append(y.drop(columns='index_right'))
+            y = gpd.sjoin(y, self.polygons)
+            self.pictures_total.append(y)
 
-        self.pictures = pd.concat(self.pictures_total, ignore_index=True).rename(columns={'NUTS_ID_new':'NUTS_ID_fin'})
+        self.pictures = pd.concat(self.pictures_total, ignore_index=True).rename(columns={'NUTS_ID_ne':'NUTS_ID_fin'})
 
     def precalculateHaversineDist(self):
         a = self.pictures.join(pd.Series(self.polygons.to_crs('+proj=cea').centroid.to_crs('EPSG:4326'), name='centroids'), on='NUTS_ID_fin')
@@ -152,7 +152,7 @@ class DataFeederOperator:
 
 convert_tensor = v2.ToTensor()
 class GeoBrainDataset(Dataset):
-    def __init__(self, img_dir, target_transform=None, transform=None):
+    def __init__(self, img_dir, target_transform=None, transform=None, load_embeddings=False):
         self.img_dir = img_dir
         self.transform = transform
         self.target_transform = target_transform
@@ -160,6 +160,16 @@ class GeoBrainDataset(Dataset):
 
         self.meteo_data = pd.read_csv(GLOBAL_DATA_OTH_PATH+'meteorological.csv', index_col=0)
         self.meteo_normalization_params = self.meteo_data.agg(['mean', 'std'])
+        self.meteo_data = (self.meteo_data-self.meteo_normalization_params.loc['mean'])/self.meteo_normalization_params.loc['std']
+
+        self.GDP_data = pd.read_csv(GLOBAL_DATA_OTH_PATH+'GDP.csv', index_col=0)
+        self.GDP_normalization_params = self.GDP_data.agg(['mean', 'std'])
+        self.GDP_data = (self.GDP_data-self.GDP_normalization_params.loc['mean'])/self.GDP_normalization_params.loc['std']
+
+        self.load_embeddings = load_embeddings
+
+        if self.load_embeddings:
+            self.target_dir = 'embeddings/%s' % self.load_embeddings
 
     def __len__(self):
         return len(self.img_dir)
@@ -177,28 +187,43 @@ class GeoBrainDataset(Dataset):
 
         paths = [x for x in glob.glob('storage/'+img_path)]
 
-        images = [convert_tensor(Image.open(path)) for path in paths]
+        if self.load_embeddings:
+            paths = [x.replace('storage', self.target_dir).replace('jpg', 'pt') for x in paths]
+            images = [torch.load(path) for path in paths]
+
+            if len(images) > 1:
+                images = torch.stack(images, dim=3)
+            else:
+                images = images[0]
+
+            if force3pano:
+                if images.dim() == 1:
+                    images = torch.stack((images,images,images), dim=1)
+                elif images.dim() == 2 and images.shape[1] == 2:
+                    images = torch.cat((images,images[:, [0]]), dim=1)
+        
+        else:
+            images = [convert_tensor(Image.open(path)) for path in paths]
+            if self.transform is not None:
+                images = [self.transform(image) for image in images]
+
+            if len(images) > 1:
+                images = torch.stack(images, dim=3)
+            else:
+                images = images[0]
+
+            if force3pano:
+                if images.dim() == 3:
+                    images = torch.stack((images,images,images), dim=3)
+                elif images.dim() == 4 and images.shape[3] == 2:
+                    images = torch.cat((images,images[:, :, :, [0]]), dim=3)
 
         d_t_c = self.img_dir.loc[idx]['distance_to_centroid']
 
         if self.target_transform is not None:
           idx, d_t_c  = self.target_transform(idx, d_t_c)
 
-        if self.transform is not None:
-          images = [self.transform(image) for image in images]
+        oth_data_meteo = torch.Tensor(self.meteo_data.loc[idx].values).to('cuda') # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
+        oth_data_gdp = torch.Tensor(self.GDP_data.loc[idx].values).to('cuda')
 
-        oth_data_meteo = torch.Tensor((self.meteo_data.loc[idx].values-
-                                       self.meteo_normalization_params.values[0, :])/self.meteo_normalization_params.values[1, :]).to('cuda') # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
-        
-        if len(images) > 1:
-           images = torch.stack(images, dim=3)
-        else:
-           images = images[0]
-
-        if force3pano:
-            if images.dim() == 3:
-                images = torch.stack((images,images,images), dim=3)
-            elif images.dim() == 4 and images.shape[3] == 2:
-                images = torch.cat((images,images[:, :, :, [0]]), dim=3)
-
-        return images, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'], oth_data_meteo)
+        return images, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'], torch.cat((oth_data_meteo, oth_data_gdp)))

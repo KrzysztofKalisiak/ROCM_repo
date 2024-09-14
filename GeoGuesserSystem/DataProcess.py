@@ -2,7 +2,7 @@ from .data_handling_classes import *
 from .config import *
 from .model_configurations import *
 
-def process_data():
+def process_data(shp, on_embedding=False):
 
     countries_t = system_configs[SYSTEM_ID]['COUNTRIES_T']
 
@@ -10,14 +10,17 @@ def process_data():
     if countries_t is None:
         countries_t = countries_all
 
-    PMD = PreMergerData(GLOBAL_DATA_PATH, countries_all, None)
-    PMD.preprocess()
-    DC = DataContainer(PMD.premerged_shapes, GLOBAL_DATA_PATH, countries_all)
+    if shp is None:
+
+        PMD = PreMergerData(GLOBAL_DATA_PATH, countries_all, None)
+        PMD.preprocess()
+        shp = PMD.premerged_shapes
+
+    DC = DataContainer(shp, GLOBAL_DATA_PATH, countries_all)
     DC.load_pictures()
     DC.precalculateHaversineDist()
 
     pct = DC.pictures
-    shp = PMD.premerged_shapes
 
     pct_n = pct['geometry'].apply(lambda x: (x.x, x.y)).values
     pct_n = np.array([*pct_n])
@@ -30,8 +33,8 @@ def process_data():
     DFO.select_data()
     DFO.train_test_split(0.2)
 
-    GBD = GeoBrainDataset(DFO.train_paths)
-    GBD_t = GeoBrainDataset(DFO.test_paths)
+    GBD = GeoBrainDataset(DFO.train_paths, load_embeddings=on_embedding)
+    GBD_t = GeoBrainDataset(DFO.test_paths, load_embeddings=on_embedding)
 
     train_dataloader = DataLoader(GBD, batch_size=15, shuffle=True)
     test_dataloader = DataLoader(GBD_t, batch_size=15, shuffle=True)
