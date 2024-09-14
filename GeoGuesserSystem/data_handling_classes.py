@@ -34,6 +34,7 @@ class PreMergerData:
         self.settings = settings
 
         shapefile = gpd.read_file(GLOBAL_DATA_OTH_PATH+'NUTS_RG_20M_2021_4326.shp')
+        shapefile.loc[shapefile['NUTS_ID']=='RO21', 'NAME_LATN'] = 'Nord-Est RO' # there is another nord-est in italy
         self.shapefile = shapefile.loc[shapefile['LEVL_CODE']==3][['NUTS_ID', 'geometry']]
         self.shapefile['NUTS_ID'] = self.shapefile['NUTS_ID'].apply(lambda x: '_'.join([x[:2], x[2], x[3], x[4]]))
 
@@ -45,7 +46,7 @@ class PreMergerData:
         total_c = pd.DataFrame()
 
         for c in self.countries:
-            y = [[x, Point(list(map(float, x.rsplit('/', 1)[1].rsplit('|', 3)[0].split('|'))))] for x in glob.glob(self.full_pictures_path+'/%s/*/*.jpg' % c)]
+            y = [[x, Point(list(map(float, x.rsplit('/', 1)[1].rsplit('|', 3)[0].split('|'))))] for x in glob.glob(self.full_pictures_path+'/%s/*.jpg' % c)]
 
             y = gpd.GeoDataFrame(y).rename(columns={0:'path', 1:'geometry'})
             y = y.set_geometry('geometry', crs='EPSG:4326')
@@ -109,7 +110,7 @@ class DataContainer:
     def load_pictures(self):
 
         for c in sorted(self.countries):
-            y = [[x, Point(list(map(float, x.rsplit('/', 1)[1].rsplit('|', 3)[0].split('|'))))] for x in glob.glob(self.full_pictures_path+'/%s/*/*.jpg' % c)]
+            y = [[x, Point(list(map(float, x.rsplit('/', 1)[1].rsplit('|', 3)[0].split('|'))))] for x in glob.glob(self.full_pictures_path+'/%s/*.jpg' % c)]
             y = gpd.GeoDataFrame(y).rename(columns={0:'path', 1:'geometry'})
             y = y.set_geometry('geometry', crs='EPSG:4326')
             y = gpd.sjoin(y, gpd.GeoDataFrame(self.polygons, crs='EPSG:4326').reset_index())
@@ -131,11 +132,19 @@ class DataFeederOperator:
         self.country_dictionary = {y:i for i, y in enumerate(self.countries_all)}
         self.country_dictionary_back = {v:k for k,v in self.country_dictionary.items()}
 
+        self.panorama = False
+
     def select_data(self):
         if self.country_selector != []:
-            self.selected_images = self.total_images.loc[self.total_images['path'].apply(lambda x: x.rsplit('/', 3)[1]).isin(self.country_selector)]
+            self.selected_images = self.total_images.loc[self.total_images['path'].apply(lambda x: x.rsplit('/', 2)[1]).isin(self.country_selector)]
         else:
             self.selected_images = self.total_images
+
+        if self.panorama:
+
+            self.selected_images['path'] = self.selected_images['path'].apply(lambda x: '|'.join(['*' if i == 1 else x for i, x in enumerate(x.rsplit('|', 2))]))
+
+            self.selected_images = self.selected_images.reset_index().groupby('path')[['index', 'geometry', 'NUTS_ID_fin', 'distance_to_centroid']].first().reset_index().set_index('index')
         
     def train_test_split(self, test_perc=0.2):
         self.test_paths = self.selected_images.sample(frac=test_perc).sort_index()
@@ -149,7 +158,8 @@ class GeoBrainDataset(Dataset):
         self.target_transform = target_transform
         self.id_translator = self.img_dir.index.values
 
-        self.meteo_data = pd.read_csv('DATA_OTHER/meteorological.csv')
+        self.meteo_data = pd.read_csv(GLOBAL_DATA_OTH_PATH+'meteorological.csv', index_col=0)
+        self.meteo_normalization_params = self.meteo_data.agg(['mean', 'std'])
 
     def __len__(self):
         return len(self.img_dir)
@@ -158,8 +168,16 @@ class GeoBrainDataset(Dataset):
         
         idx = self.id_translator[id]
 
-        img_path = self.img_dir.loc[idx]['path'].split('DATA/')[1]
-        image = convert_tensor(Image.open('DATA/'+img_path))
+        img_path = self.img_dir.loc[idx]['path'].split('storage/')[1]
+
+        if '*' in img_path:
+            force3pano = True
+        else:
+            force3pano = False
+
+        paths = [x for x in glob.glob('storage/'+img_path)]
+
+        images = [convert_tensor(Image.open(path)) for path in paths]
 
         d_t_c = self.img_dir.loc[idx]['distance_to_centroid']
 
@@ -167,8 +185,20 @@ class GeoBrainDataset(Dataset):
           idx, d_t_c  = self.target_transform(idx, d_t_c)
 
         if self.transform is not None:
-          image = self.transform(image)
+          images = [self.transform(image) for image in images]
 
-        oth_data_meteo = torch.Tensor(self.meteo_data.loc[idx].values).to('cuda') # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
+        oth_data_meteo = torch.Tensor((self.meteo_data.loc[idx].values-
+                                       self.meteo_normalization_params.values[0, :])/self.meteo_normalization_params.values[1, :]).to('cuda') # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
+        
+        if len(images) > 1:
+           images = torch.stack(images, dim=3)
+        else:
+           images = images[0]
 
-        return image, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'], oth_data_meteo)
+        if force3pano:
+            if images.dim() == 3:
+                images = torch.stack((images,images,images), dim=3)
+            elif images.dim() == 4 and images.shape[3] == 2:
+                images = torch.cat((images,images[:, :, :, [0]]), dim=3)
+
+        return images, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'], oth_data_meteo)

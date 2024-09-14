@@ -6,7 +6,7 @@ from .utils import *
 import torch.optim as optim
 
 def first(l, _):
-    return l[0].to('cuda')
+    return l[0]
 
 model_configs = {
 

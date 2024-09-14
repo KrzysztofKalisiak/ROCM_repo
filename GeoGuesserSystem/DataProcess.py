@@ -6,7 +6,7 @@ def process_data():
 
     countries_t = system_configs[SYSTEM_ID]['COUNTRIES_T']
 
-    countries_all = set([x.split(GLOBAL_DATA_PATH.rsplit('/', 1)[1]+'/')[1].split('/')[0] for x in glob.glob(GLOBAL_DATA_PATH+'/*/*/*.jpg')])
+    countries_all = set([x.split(GLOBAL_DATA_PATH.rsplit('/', 1)[1]+'/')[1].split('/')[0] for x in glob.glob(GLOBAL_DATA_PATH+'/*/*.jpg')])
     if countries_t is None:
         countries_t = countries_all
 
@@ -26,6 +26,7 @@ def process_data():
     shp_n = np.array([*shp_n])
 
     DFO = DataFeederOperator(DC.pictures, list(countries_t), countries_all)
+    DFO.panorama = False
     DFO.select_data()
     DFO.train_test_split(0.2)
 

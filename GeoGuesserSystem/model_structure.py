@@ -41,13 +41,7 @@ class GeoBrainNetwork(nn.Module):
 
         self.target_outputs = target_outputs
 
-        #for key, value in self.target_outputs.items():
-        #    self.target_outputs[key] = self.target_outputs[key].to('cuda')
-
         self.reductions = reductions
-
-        #for key, value in self.reductions.items():
-        #    self.reductions[key] = self.reductions[key].to('cuda')
 
     def _freeze_barebone_paremeters(self):
 
@@ -57,10 +51,17 @@ class GeoBrainNetwork(nn.Module):
             if not name in not_to_freeze:
                 param.requires_grad = False
         
-    def forward(self, x):
+    def forward(self, x, mode='location_only'):
+        
+        if x.dim() == 5: # panorama
 
-        x = self.preprocess_func(x)
-        x = self.barebone_model(x)
+            x_ = torch.stack([self.barebone_model(self.preprocess_func(x[:, :, :, :, ij])) for ij in range(x.shape[4])])
+            x = torch.mean(x_, dim=0)
+
+        else: # no panorama
+            
+            x = self.preprocess_func(x)
+            x = self.barebone_model(x)
 
         outputs = {}
 
@@ -82,6 +83,9 @@ class GeoBrainNetwork(nn.Module):
                         outputs[i].append(x_)
                 concurrent_res.append(x_)
             x = self.reductions[i](concurrent_res, 1)
+
+        if mode == 'location_only':
+            outputs = outputs[2][0]
 
         return outputs
     

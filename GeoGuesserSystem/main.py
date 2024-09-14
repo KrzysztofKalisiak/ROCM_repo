@@ -141,20 +141,16 @@ class BRAIN:
         loss = 0
         for auxiliary_level in model:
 
-            '''for i, x in enumerate(self.criterions[auxiliary_level]):
+            if auxiliary_level == 1:
 
-                #print(real[auxiliary_level])
+                for i, x in enumerate(self.criterions[auxiliary_level]):
 
-                try:
+                    loss += 10*x(model[auxiliary_level][i][:, 0], real[auxiliary_level][:, i])
+            else:
+
+                for i, x in enumerate(self.criterions[auxiliary_level]):
+
                     loss += x(model[auxiliary_level][i], real[auxiliary_level][i])
-                except:
-                    print(model[auxiliary_level][i])
-                    print(real[auxiliary_level][i])
-                    raise Exception'''
-
-            loss += sum([
-                x(model[auxiliary_level][i], real[auxiliary_level][i]) 
-                for i, x in enumerate(self.criterions[auxiliary_level])])
 
         return loss
 
@@ -168,7 +164,7 @@ class BRAIN:
                 inputs = data[0].to(self.device)
 
                 real_y = self.real_output_extract(data[1])
-                network_output_y = self.NN(inputs)
+                network_output_y = self.NN(inputs, mode='all')
                 
                 self.optimizer.zero_grad()
 
@@ -188,8 +184,8 @@ class BRAIN:
             inputs = data[0].to(self.device)
             true_labels_name= data[1][4]
 
-            model_labels = self.NN(inputs)
-            model_labels_bin = torch.argmax(model_labels, 1).cpu()
+            network_output_y = self.NN(inputs, mode='all')
+            model_labels_bin = torch.argmax(network_output_y[2][0], 1).cpu()
             model_labels_name = self.shp.iloc[self.selected_indexes].iloc[model_labels_bin].index.values
 
             self.total_occurences += list(zip(true_labels_name, model_labels_name))
@@ -233,14 +229,16 @@ class BRAIN:
         results = []
         labels = []
 
-        for ind in range(data[0].shape[0]):
-            inputs = data[0].to(self.device)
+        inputs = data[0].to(self.device)
 
-            true_id_haversine = self.full_precompute[data[1][0], :][:, self.selected_indexes]
-            y = torch.exp(-(true_id_haversine - (data[1][1][:, None]))/self.tau).to(self.device)
+        true_id_haversine = self.full_precompute[data[1][0], :][:, self.selected_indexes]
+        y = torch.exp(-(true_id_haversine - (data[1][1][:, None]))/self.tau).to(self.device)
 
-            model_labels = self.NN(inputs)
-            model_labels_bin = torch.argmax(model_labels, 1).cpu()
+        network_output_y = self.NN(inputs, mode='all')
+        model_labels_bin = torch.argmax(network_output_y[2][0], 1).cpu()
+
+        for ind in range(data[0].shape[0]): #data[0].shape[0]
+
             labels.append(model_labels_bin[ind])
 
             standard_penalize = -(y[ind]-y[ind].mean())/y[ind].std()
@@ -248,9 +246,9 @@ class BRAIN:
 
             s1 = self.shp.iloc[self.selected_indexes]
             s1['penalize'] = standard_penalize.cpu()
-            s1['probability'] = model_labels[0].detach().cpu().numpy()
+            s1['probability'] = network_output_y[2][0][ind].detach().cpu().numpy()
 
-            fig, ax = plt.subplots(1, 2)
+            fig, ax = plt.subplots(1, 2, figsize=(60, 30))
 
             cords = list(zip(data[1][2].tolist(), data[1][3].tolist()))
 
@@ -274,7 +272,7 @@ class BRAIN:
 
             self.NN.eval()
             targets = [ClassifierOutputTarget(labels[ind])] 
-            target_layers = [self.NN.barebone_model.conv1]
+            target_layers = [self.NN.barebone_model.trunk.patch_embed.proj]
 
             cam = GradCAM(model=self.NN, target_layers=target_layers) # use GradCamPlusPlus class
 
@@ -296,45 +294,3 @@ class BRAIN:
         self.NN._freeze_barebone_paremeters()
 
         return results, results_grad
-    
-class EmptyModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-    def forward(self, x):
-        return x
-
-class GeoBrainNetwork(nn.Module):
-    def __init__(self, 
-                 barebone_model=EmptyModel(),
-                 barebone_unfreeze_config=slice(0,0),
-                 model_elements=[],
-                 preprocess_func=lambda x: x):
-        super().__init__()
-
-        self.barebone_model = barebone_model
-        self.barebone_unfreeze_config = barebone_unfreeze_config
-
-        self.mods = nn.ModuleList(model_elements)
-
-        self.preprocess_func = preprocess_func
-
-    def _freeze_barebone_paremeters(self):
-
-        not_to_freeze = get_graph_node_names(self.barebone_model)[self.barebone_unfreeze_config]
-
-        for name, param in self.barebone_model.named_parameters():
-            if not name in not_to_freeze:
-                param.requires_grad = False
-        
-    def forward(self, x):
-
-        x = self.preprocess_func(x)
-        x = self.barebone_model(x)
-
-        if type(x) is tuple:
-            x = x[0]
-
-        for m in self.mods:
-            x = m(x)
-
-        return x
