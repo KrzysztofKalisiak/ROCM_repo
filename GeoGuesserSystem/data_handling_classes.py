@@ -45,58 +45,58 @@ class PreMergerData:
     def preprocess(self):
         total_c = pd.DataFrame()
 
-        for c in self.countries:
-            y = [[x, Point(list(map(float, x.rsplit('/', 1)[1].rsplit('|', 3)[0].split('|'))))] for x in glob.glob(self.full_pictures_path+'/%s/*.jpg' % c)]
+        y = [[x, Point(list(map(float, x.rsplit('/', 1)[1].rsplit('|', 3)[0].split('|'))))] for x in glob.glob(self.full_pictures_path+'/*/*.jpg')]
 
-            y = gpd.GeoDataFrame(y).rename(columns={0:'path', 1:'geometry'})
-            y = y.set_geometry('geometry', crs='EPSG:4326')
-            y = gpd.sjoin(y, self.shapefile).drop(columns='index_right').copy()
+        y = gpd.GeoDataFrame(y).rename(columns={0:'path', 1:'geometry'})
+        y = y.set_geometry('geometry', crs='EPSG:4326')
+        y = gpd.sjoin(y, self.shapefile).drop(columns='index_right').copy()
 
-            to_be_merged = y.groupby('NUTS_ID')['NUTS_ID'].count()
+        to_be_merged = y.groupby('NUTS_ID')['NUTS_ID'].count()
 
-            y['add_cat2'] = np.nan
-            y['add_cat2'] = y['add_cat2'].astype(str)
+        y['add_cat2'] = np.nan
+        y['add_cat2'] = y['add_cat2'].astype(str)
 
-            merges = []
+        merges = []
 
-            for x in to_be_merged.loc[to_be_merged<30].index:
-                ind = self.shapefile['NUTS_ID'].loc[self.shapefile['NUTS_ID']==x].index[0]
-                distances = self.centroid_distance_matrix[ind].drop(ind).copy()
-                touch_ar = self.touching[ind].drop(ind).copy()
-                self_country_ar = self.country[ind].drop(ind).copy()
+        for x in to_be_merged.loc[to_be_merged<30].index:
+            ind = self.shapefile['NUTS_ID'].loc[self.shapefile['NUTS_ID']==x].index[0]
+            distances = self.centroid_distance_matrix[ind].drop(ind).copy()
+            touch_ar = self.touching[ind].drop(ind).copy()
+            self_country_ar = self.country[ind].drop(ind).copy()
 
-                distances += np.abs(touch_ar-1)*100000
-                distances += np.abs(self_country_ar-1)*100000
-                
-                id_to_merge_to = self.shapefile['NUTS_ID'].loc[distances.loc[distances==distances.min()].index[0]]
+            distances += np.abs(touch_ar-1)*100000
+            distances += np.abs(self_country_ar-1)*100000
+            
+            id_to_merge_to = self.shapefile['NUTS_ID'].loc[distances.loc[distances==distances.min()].index[0]]
 
-                merges.append((id_to_merge_to, x))
+            merges.append((id_to_merge_to, x))
 
-            result = []
+        result = []
 
-            for tup in merges:
-                for idx, already in enumerate(result):
-                    if any(item in already for item in tup):
-                        result[idx] = already + tuple(item for item in tup if item not in already)
-                        break
-                else:
-                    result.append(tup)
+        for tup in merges:
+            for idx, already in enumerate(result):
+                if any(item in already for item in tup):
+                    result[idx] = already + tuple(item for item in tup if item not in already)
+                    break
+            else:
+                result.append(tup)
 
-            for i, x in enumerate(result):
+        for i, x in enumerate(result):
 
-                for xx in x:
+            for xx in x:
 
-                    y.loc[y['NUTS_ID']==xx, 'add_cat2'] = x[0]+str(i)
+                y.loc[y['NUTS_ID']==xx, 'add_cat2'] = x[0]+str(i)
 
-            y['NUTS_ID_ne'] = y.apply(lambda x: x['add_cat2'] if x['add_cat2'] != 'nan' else x['NUTS_ID'], axis=1)
-            y = y.drop(columns = ['add_cat2'])
+        y['NUTS_ID_ne'] = y.apply(lambda x: x['add_cat2'] if x['add_cat2'] != 'nan' else x['NUTS_ID'], axis=1)
+        y = y.drop(columns = ['add_cat2'])
 
-            total_c = pd.concat([total_c, y])
+        total_c = y.copy()
 
-        x3 = self.shapefile.join(total_c[['NUTS_ID', 'NUTS_ID_ne']].drop_duplicates().set_index('NUTS_ID'), on='NUTS_ID', rsuffix='_points')
+        x3 = self.shapefile.join(total_c[['NUTS_ID', 'NUTS_ID_ne']].drop_duplicates().set_index('NUTS_ID'), on='NUTS_ID')
+        x3['NUTS_ID_ne'] = x3['NUTS_ID_ne'].fillna('NUTS_ID')
         self.premerged_shapes = x3.groupby('NUTS_ID_ne')['geometry'].apply(lambda x: unary_union(x))
         self.premerged_shapes.crs = "EPSG:4326"
-        self.premerged_shapes = gpd.GeoDataFrame(self.premerged_shapes.reset_index().set_index('NUTS_ID_ne'), crs='EPSG:4326')
+        self.premerged_shapes = gpd.GeoDataFrame(self.premerged_shapes, crs='EPSG:4326')
 
 class DataContainer:
     def __init__(self, polygons, full_pictures_path, countries):
@@ -104,19 +104,15 @@ class DataContainer:
         self.polygons = polygons
         self.full_pictures_path = full_pictures_path
         self.countries = countries
-
-        self.pictures_total = []
     
     def load_pictures(self):
 
-        for c in sorted(self.countries):
-            y = [[x, Point(list(map(float, x.rsplit('/', 1)[1].rsplit('|', 3)[0].split('|'))))] for x in glob.glob(self.full_pictures_path+'/%s/*.jpg' % c)]
-            y = gpd.GeoDataFrame(y).rename(columns={0:'path', 1:'geometry'})
-            y = y.set_geometry('geometry', crs='EPSG:4326')
-            y = gpd.sjoin(y, self.polygons)
-            self.pictures_total.append(y)
+        y = [[x, Point(list(map(float, x.rsplit('/', 1)[1].rsplit('|', 3)[0].split('|'))))] for x in glob.glob(self.full_pictures_path+'/*/*.jpg')]
+        y = gpd.GeoDataFrame(y).rename(columns={0:'path', 1:'geometry'})
+        y = y.set_geometry('geometry', crs='EPSG:4326')
+        y = gpd.sjoin_nearest(y, self.polygons)
 
-        self.pictures = pd.concat(self.pictures_total, ignore_index=True).rename(columns={'NUTS_ID_ne':'NUTS_ID_fin'})
+        self.pictures = y.copy().rename(columns={'NUTS_ID_ne':'NUTS_ID_fin'})
 
     def precalculateHaversineDist(self):
         a = self.pictures.join(pd.Series(self.polygons.to_crs('+proj=cea').centroid.to_crs('EPSG:4326'), name='centroids'), on='NUTS_ID_fin')
