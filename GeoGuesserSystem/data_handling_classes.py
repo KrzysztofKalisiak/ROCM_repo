@@ -166,6 +166,10 @@ class GeoBrainDataset(Dataset):
 
         if self.load_embeddings:
             self.target_dir = 'embeddings/%s' % self.load_embeddings
+            self.all_embeddings = torch.load(self.target_dir + '/all_embeddings.pt')
+
+            for key, value in self.all_embeddings.items():
+                self.all_embeddings[key] = self.all_embeddings[key].to(DEVICE)
 
     def __len__(self):
         return len(self.img_dir)
@@ -184,8 +188,8 @@ class GeoBrainDataset(Dataset):
         paths = [x for x in glob.glob('storage/'+img_path)]
 
         if self.load_embeddings:
-            paths = [x.replace('storage', self.target_dir).replace('jpg', 'pt') for x in paths]
-            images = [torch.load(path)[0, :] for path in paths]
+            paths = [x.replace('storage/', '').replace('jpg', 'pt') for x in paths]
+            images = [self.all_embeddings[path][0, :] for path in paths]
 
             if len(images) > 1:
                 images = torch.stack(images, dim=3)
@@ -222,4 +226,10 @@ class GeoBrainDataset(Dataset):
         oth_data_meteo = torch.Tensor(self.meteo_data.loc[idx].values) # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
         oth_data_gdp = torch.Tensor(self.GDP_data.loc[idx].values)
 
-        return images, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'], torch.cat((oth_data_meteo, oth_data_gdp)).to('cuda'))
+        return images, (
+                        idx, d_t_c, 
+                        self.img_dir.loc[idx]['geometry'].x, 
+                        self.img_dir.loc[idx]['geometry'].y, 
+                        self.img_dir.loc[idx]['NUTS_ID_fin'], 
+                        torch.cat((oth_data_meteo, oth_data_gdp)).to(DEVICE)
+                        )

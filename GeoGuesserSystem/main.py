@@ -29,6 +29,17 @@ warnings.filterwarnings("ignore")
 
 from .utils import *
 
+def plot_loss_update(epoch, epochs, mb, train_loss):
+    x = range(epoch+1)
+    y = train_loss
+    graphs = [[x,train_loss]]
+    x_margin = 0.2
+    y_margin = 0.05
+    x_bounds = [1-x_margin, epochs+x_margin]
+    y_bounds = [np.min(y)-y_margin, np.max(y)+y_margin]
+
+    mb.update_graph(graphs, x_bounds, y_bounds)
+
 def get_guess_matrix(total_occurences):
     df1 = pd.DataFrame(total_occurences, columns=['true', 'pred']).groupby('true')['pred'].value_counts().unstack()
     df1 = df1.reindex(df1.index, axis=1).fillna(0)
@@ -113,21 +124,22 @@ class BRAIN:
 
     def prepare_system(self, countries=['AL']):
         
-        self.full_precompute = torch.tensor(f(self.pct_n, self.shp_n)).to(torch.float64)
+        self.full_precompute = torch.tensor(f(self.pct_n, self.shp_n)).to(torch.float64).to(self.device)
         self.criterions = self.loss
 
         self.select_indexes = np.arange(self.shp.index.shape[0])[self.shp.index.str.startswith(tuple(countries))]
-        self.selected_indexes = torch.Tensor(self.select_indexes).to(torch.int32)
-
-        self.NN.to(self.device)
+        self.selected_indexes = torch.Tensor(self.select_indexes).to(torch.int32).to(self.device)
     
     def real_output_extract(self, data):
 
         real_output = {}
         
         # level2 geolocation
-        true_id_haversine = self.full_precompute[data[0], :][:, self.selected_indexes.long()]
-        real_y = torch.exp(-(true_id_haversine - (data[1][:, None]))/self.tau).to(self.device)
+        Hav_gi_xn = self.full_precompute[data[0], :][:, self.selected_indexes.long()]
+        Hav_gn_xn = data[1][:, None].to(self.device)
+        distance = Hav_gi_xn-Hav_gn_xn
+        adj_distance = distance - torch.min(distance, dim=1, keepdim=True).values
+        real_y = torch.exp(-(adj_distance)/self.tau)
 
         real_output[2] = [real_y]
 
@@ -141,6 +153,9 @@ class BRAIN:
 
         loss = 0
         for auxiliary_level in model:
+
+            if auxiliary_level not in self.criterions:
+                continue
 
             if auxiliary_level == 1:
 
@@ -157,25 +172,29 @@ class BRAIN:
 
     def train(self, epochs=1):
 
+        self.train_loss = []
         for epoch in (pbar := master_bar(range(epochs))):  # loop over the dataset multiple times
-
+            
             running_loss = 0.0
             for data in progress_bar(self.train_dataloader, parent=pbar):
 
-                inputs = data[0].to(self.device)
+                inputs = data[0]
 
-                real_y = self.real_output_extract(data[1])
-                network_output_y = self.NN(inputs, mode='all')
-                
                 self.optimizer.zero_grad()
 
+                real_y = self.real_output_extract(data[1])
+
+                network_output_y = self.NN(inputs, mode='all')
                 loss = self.loss_calculator(network_output_y, real_y)
+
                 loss.backward()
                 self.optimizer.step()
 
                 running_loss += loss.item()
 
+            self.train_loss.append(running_loss)
             pbar.main_bar.comment = "Loss: "+str(running_loss)
+            plot_loss_update(epoch, epochs, pbar, self.train_loss)
     
     def generate_test_main(self):
         self.total_occurences = []

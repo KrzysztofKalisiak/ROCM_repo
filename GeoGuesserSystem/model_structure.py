@@ -112,7 +112,7 @@ def model_loader(model_id):
                                     model_conf['preprocess'],
                                     model_conf['target_outputs'],
                                     model_conf['concurrent_reduction']
-                                    )
+                                    ).to(DEVICE)
     
     if model_conf['basemodel'] is not None:
         ModelBarebone._freeze_barebone_paremeters()

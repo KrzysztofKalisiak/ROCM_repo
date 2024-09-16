@@ -186,7 +186,7 @@ for country_code in pdc.NUTS_ID_fin.str[:2].unique():
     selected_country_shapes = s2_3.loc[s2_3['CNTR_CODE']==country_code]
     selected_country_points = pdc.loc[pdc['NUTS_ID_fin'].str[:2]==country_code]
 
-    distance_matrix = selected_country_shapes.geometry.apply(lambda g: selected_country_points.distance(g))
+    distance_matrix = selected_country_shapes.centroid_loc.apply(lambda g: selected_country_points.distance(g))
     normalized_weights = distance_matrix/distance_matrix.sum(axis=0)
 
     interpolated_GDP = selected_country_shapes['final_GDP_proxy'] @ normalized_weights
