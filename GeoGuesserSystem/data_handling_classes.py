@@ -93,7 +93,7 @@ class PreMergerData:
         total_c = y.copy()
 
         x3 = self.shapefile.join(total_c[['NUTS_ID', 'NUTS_ID_ne']].drop_duplicates().set_index('NUTS_ID'), on='NUTS_ID')
-        x3['NUTS_ID_ne'] = x3['NUTS_ID_ne'].fillna('NUTS_ID')
+        x3['NUTS_ID_ne'] = x3['NUTS_ID_ne'].fillna(x3['NUTS_ID'])
         self.premerged_shapes = x3.groupby('NUTS_ID_ne')['geometry'].apply(lambda x: unary_union(x))
         self.premerged_shapes.crs = "EPSG:4326"
         self.premerged_shapes = gpd.GeoDataFrame(self.premerged_shapes, crs='EPSG:4326')
@@ -185,7 +185,7 @@ class GeoBrainDataset(Dataset):
 
         if self.load_embeddings:
             paths = [x.replace('storage', self.target_dir).replace('jpg', 'pt') for x in paths]
-            images = [torch.load(path) for path in paths]
+            images = [torch.load(path)[0, :] for path in paths]
 
             if len(images) > 1:
                 images = torch.stack(images, dim=3)
@@ -219,7 +219,7 @@ class GeoBrainDataset(Dataset):
         if self.target_transform is not None:
           idx, d_t_c  = self.target_transform(idx, d_t_c)
 
-        oth_data_meteo = torch.Tensor(self.meteo_data.loc[idx].values).to('cuda') # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
-        oth_data_gdp = torch.Tensor(self.GDP_data.loc[idx].values).to('cuda')
+        oth_data_meteo = torch.Tensor(self.meteo_data.loc[idx].values) # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
+        oth_data_gdp = torch.Tensor(self.GDP_data.loc[idx].values)
 
-        return images, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'], torch.cat((oth_data_meteo, oth_data_gdp)))
+        return images, (idx, d_t_c, self.img_dir.loc[idx]['geometry'].x, self.img_dir.loc[idx]['geometry'].y, self.img_dir.loc[idx]['NUTS_ID_fin'], torch.cat((oth_data_meteo, oth_data_gdp)).to('cuda'))

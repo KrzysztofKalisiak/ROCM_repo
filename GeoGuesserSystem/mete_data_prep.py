@@ -6,18 +6,19 @@ from shapely import Point
 
 countries_t = system_configs[SYSTEM_ID]['COUNTRIES_T']
 
-countries_all = set([x.split(GLOBAL_DATA_PATH.rsplit('/', 1)[1]+'/')[1].split('/')[0] for x in glob.glob(GLOBAL_DATA_PATH+'/*/*/*.jpg')])
+countries_all = set([x.split(GLOBAL_DATA_PATH.rsplit('/', 1)[1]+'/')[1].split('/')[0] for x in glob.glob(GLOBAL_DATA_PATH+'/*/*.jpg')])
 if countries_t is None:
     countries_t = countries_all
 
 PMD = PreMergerData(GLOBAL_DATA_PATH, countries_all, None)
 PMD.preprocess()
-DC = DataContainer(PMD.premerged_shapes, GLOBAL_DATA_PATH, countries_all)
+shp = PMD.premerged_shapes
+
+DC = DataContainer(shp, GLOBAL_DATA_PATH, countries_all)
 DC.load_pictures()
 DC.precalculateHaversineDist()
 
 pct = DC.pictures
-shp = PMD.premerged_shapes
 
 pct_n = pct['geometry'].apply(lambda x: (x.x, x.y)).values
 pct_n = np.array([*pct_n])
@@ -48,10 +49,9 @@ for var in ['rg', 'tn', 'tx', 'pr', 'ws', 'pd']:
 
     res = pd.concat((res, xds), axis=1)
 
-    res.index = res.index.droplevel(1)
+res.index = res.index.droplevel(1)
 
-    res.drop(columns='index_right').rename(columns={'pr':'precipitation', 'ws':'wind_speed', 'tx':'max_temp', 'tn':'min_temp', 'rg':'solar radiation', 'pd':'water vapour pressure'}).to_csv('DATA_OTHER/meteorological.csv')
-
+res.drop(columns='index_right').rename(columns={'pr':'precipitation', 'ws':'wind_speed', 'tx':'max_temp', 'tn':'min_temp', 'rg':'solar radiation', 'pd':'water vapour pressure'}).to_csv('DATA_OTHER/meteorological.csv')
 
 
 shapefile = gpd.read_file(GLOBAL_DATA_OTH_PATH+'NUTS_RG_20M_2021_4326.shp')
@@ -143,6 +143,7 @@ full.loc[len(full)] = ['LI00', 'Liechtenstein', 187267.1]
 full.loc[len(full)] = ['IS0', 'Ísland', 73466.78]
 full.loc[len(full)] = ['IS00', 'Ísland', 73466.78]
 
+
 s2 = shapefile.join(full.set_index('FID'), on='FID', rsuffix='_r').drop(columns='NAME_LATN_r')
 
 s2['GDP'] = s2['GDP'].apply(lambda x: np.nan if np.isinf(x) else x)
@@ -162,24 +163,37 @@ s2_3["final_GDP_proxy"] = s2_3["final_GDP_proxy"].clip(upper=s2_3["final_GDP_pro
 
 s2_3['centroid_loc'] = s2_3.centroid
 
-BR = system_loader()
+countries_t = system_configs[SYSTEM_ID]['COUNTRIES_T']
 
-pdc = pd.concat([BR.train_dataloader.dataset.img_dir, BR.test_dataloader.dataset.img_dir]).sort_index()
+countries_all = set([x.split(GLOBAL_DATA_PATH.rsplit('/', 1)[1]+'/')[1].split('/')[0] for x in glob.glob(GLOBAL_DATA_PATH+'/*/*.jpg')])
+if countries_t is None:
+    countries_t = countries_all
 
-GDPs = []
+PMD = PreMergerData(GLOBAL_DATA_PATH, countries_all, None)
+PMD.preprocess()
+shp = PMD.premerged_shapes
 
-for i in tqdm.tqdm(range(pdc.shape[0])):
-    country_code = pdc.iloc[i].NUTS_ID_fin[:2]
+DC = DataContainer(shp, GLOBAL_DATA_PATH, countries_all)
+DC.load_pictures()
+DC.precalculateHaversineDist()
 
-    selected_country = s2_3.loc[s2_3['CNTR_CODE']==country_code]
+pdc = DC.pictures
 
+parts = []
 
-    non_normalized_weights = 1/selected_country.centroid_loc.distance(pdc.iloc[i].geometry)
-    normalized_weights = non_normalized_weights/non_normalized_weights.sum()
+for country_code in pdc.NUTS_ID_fin.str[:2].unique():
 
-    GDP = np.sum(normalized_weights.values * selected_country.final_GDP_proxy.values)
+    selected_country_shapes = s2_3.loc[s2_3['CNTR_CODE']==country_code]
+    selected_country_points = pdc.loc[pdc['NUTS_ID_fin'].str[:2]==country_code]
 
-    GDPs.append(GDP)
+    distance_matrix = selected_country_shapes.geometry.apply(lambda g: selected_country_points.distance(g))
+    normalized_weights = distance_matrix/distance_matrix.sum(axis=0)
 
-pdc['GPD'] = GDPs
+    interpolated_GDP = selected_country_shapes['final_GDP_proxy'] @ normalized_weights
+
+    parts.append(interpolated_GDP)
+
+GDP = pd.concat(parts)
+pdc['GPD'] = GDP
+
 pdc['GPD'].to_csv('DATA_OTHER/GDP.csv')

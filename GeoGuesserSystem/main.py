@@ -9,7 +9,6 @@ from shapely.geometry import Point
 from shapely.ops import unary_union
 
 import torch.optim as optim
-import tqdm
 
 import torch.nn as nn
 import torch
@@ -22,6 +21,8 @@ from pytorch_grad_cam.utils.image import show_cam_on_image,preprocess_image
 from torchvision.models.feature_extraction import get_graph_node_names
 from PIL import Image
 import cv2
+
+from fastprogress.fastprogress import master_bar, progress_bar
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -156,10 +157,10 @@ class BRAIN:
 
     def train(self, epochs=1):
 
-        for epoch in (pbar := tqdm.tqdm(range(epochs))):  # loop over the dataset multiple times
+        for epoch in (pbar := master_bar(range(epochs))):  # loop over the dataset multiple times
 
             running_loss = 0.0
-            for i, data in tqdm.tqdm(enumerate(self.train_dataloader, 0), total=self.train_dataloader.__len__(), leave=False):
+            for data in progress_bar(self.train_dataloader, parent=pbar):
 
                 inputs = data[0].to(self.device)
 
@@ -174,13 +175,13 @@ class BRAIN:
 
                 running_loss += loss.item()
 
-            pbar.set_description("Loss: "+str(running_loss))
+            pbar.main_bar.comment = "Loss: "+str(running_loss)
     
     def generate_test_main(self):
         self.total_occurences = []
         self.cords_list = []
 
-        for i, data in tqdm.tqdm(enumerate(self.test_dataloader, 0), total=self.test_dataloader.__len__()):
+        for i, data in master_bar(enumerate(self.test_dataloader, 0), total=self.test_dataloader.__len__()):
             inputs = data[0].to(self.device)
             true_labels_name= data[1][4]
 

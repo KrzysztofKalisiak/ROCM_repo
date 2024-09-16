@@ -50,7 +50,7 @@ model_configs = {
                                             [nn.Dropout(p=0.1),nn.ReLU(),nn.Linear(1152, 1500),nn.Dropout(p=0.1),nn.ReLU()]
                                         ], 
                                         [
-                                            [nn.Linear(1500, 1001), nn.ReLU()],
+                                            [nn.Linear(1500, 1200), nn.ReLU()],
                                             [nn.Linear(1500, 1), nn.ReLU()],
                                             [nn.Linear(1500, 1), nn.ReLU()],
                                             [nn.Linear(1500, 1), nn.ReLU()],
@@ -60,7 +60,7 @@ model_configs = {
                                             [nn.Linear(1500, 1), nn.ReLU()]
                                         ],
                                         [ 
-                                            [nn.Dropout(p=0.1), nn.Linear(1008, 10),nn.Softmax(dim=1)]
+                                            [nn.Dropout(p=0.1), nn.Linear(1207, 1236),nn.Softmax(dim=1)]
                                         ]
                                     ],
         'unfreeze_basemodel_params_conf':slice(0, 0),
@@ -105,7 +105,7 @@ system_configs = {
         'blur_system':None,
         'save_system':True,
         'model_ID':'ID2',
-        'predefined_region_grid':'ID1',
+        'predefined_region_grid':None,
         'on_embeddings':'ViT-SO400M-14-SigLIP-384'
         }
 }
