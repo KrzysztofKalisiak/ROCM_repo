@@ -124,7 +124,7 @@ def model_loader(model_id):
 
         checkpoint = torch.load(GLOBAL_MODELS_PATH+model_id+'.pt', weights_only=True)
         ModelBarebone.load_state_dict(checkpoint['model_state_dict'])
-        #Optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        Optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
     return ModelBarebone, Optimizer
 
