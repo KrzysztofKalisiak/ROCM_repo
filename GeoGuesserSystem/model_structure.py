@@ -29,7 +29,8 @@ class GeoBrainNetwork(nn.Module):
                  model_elements=[],
                  preprocess_func=lambda x: x,
                  target_outputs = {},
-                 reductions = {}):
+                 reductions = {},
+                 tasks = {}):
         super().__init__()
 
         self.barebone_model = barebone_model
@@ -43,6 +44,8 @@ class GeoBrainNetwork(nn.Module):
 
         self.reductions = reductions
 
+        self.tasks = tasks
+
     def _freeze_barebone_paremeters(self):
 
         not_to_freeze = get_graph_node_names(self.barebone_model)[self.barebone_unfreeze_config]
@@ -51,14 +54,14 @@ class GeoBrainNetwork(nn.Module):
             if not name in not_to_freeze:
                 param.requires_grad = False
         
-    def forward(self, x, mode='location_only'):
+    def forward(self, x):
 
         if x.dim() in [4, 5]: # on picture itself
         
             if x.dim() == 5: # panorama
 
                 x_ = torch.stack([self.barebone_model(self.preprocess_func(x[:, :, :, :, ij])) for ij in range(x.shape[4])])
-                x = torch.mean(x_, dim=0)
+                x = torch.mean(x_, dim=4)
 
             else: # no panorama
                 
@@ -67,7 +70,7 @@ class GeoBrainNetwork(nn.Module):
         else: # on embedding
 
             if x.dim() == 3: # panorama
-                x = torch.mean(x, dim=0)
+                x = torch.mean(x, dim=2)
 
         outputs = {}
 
@@ -90,9 +93,6 @@ class GeoBrainNetwork(nn.Module):
                 concurrent_res.append(x_)
             x = self.reductions[i](concurrent_res, 1)
 
-        if mode == 'location_only':
-            outputs = outputs[2][0]
-
         return outputs
     
 def model_loader(model_id):
@@ -111,7 +111,8 @@ def model_loader(model_id):
                                     model_conf['geolocation_model_extension'],
                                     model_conf['preprocess'],
                                     model_conf['target_outputs'],
-                                    model_conf['concurrent_reduction']
+                                    model_conf['concurrent_reduction'],
+                                    model_conf['tasks']
                                     ).to(DEVICE)
     
     if model_conf['basemodel'] is not None:
@@ -123,7 +124,7 @@ def model_loader(model_id):
 
         checkpoint = torch.load(GLOBAL_MODELS_PATH+model_id+'.pt', weights_only=True)
         ModelBarebone.load_state_dict(checkpoint['model_state_dict'])
-        Optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        #Optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
     return ModelBarebone, Optimizer
 
@@ -152,6 +153,7 @@ def system_loader(force_override=False):
     BR.train_dataloader = train_dataloader
     BR.test_dataloader = test_dataloader
     BR.loss = system_conf['auxiliary_loss']
+    BR.loss_multiplier = system_conf['loss_multiplier']
     BR.tau = system_conf['tau']
     BR.pct_n = pct_n
     BR.pct = pct
@@ -159,6 +161,7 @@ def system_loader(force_override=False):
     BR.shp = shp
     BR.device = DEVICE
     BR.optimizer = optimizer
+    BR.y_variable_names = system_conf['variable_names']
 
     BR.prepare_system(list(countries))
 

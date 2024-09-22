@@ -143,7 +143,7 @@ class DataFeederOperator:
             self.selected_images = self.selected_images.reset_index().groupby('path')[['index', 'geometry', 'NUTS_ID_fin', 'distance_to_centroid']].first().reset_index().set_index('index')
         
     def train_test_split(self, test_perc=0.2):
-        self.test_paths = self.selected_images.sample(frac=test_perc).sort_index()
+        self.test_paths = self.selected_images.groupby('NUTS_ID_fin').sample(frac=test_perc).sort_index()
         self.train_paths = self.selected_images.drop(self.test_paths.index).sort_index()
 
 convert_tensor = v2.ToTensor()
@@ -167,9 +167,8 @@ class GeoBrainDataset(Dataset):
         if self.load_embeddings:
             self.target_dir = 'embeddings/%s' % self.load_embeddings
             self.all_embeddings = torch.load(self.target_dir + '/all_embeddings.pt')
-
-            for key, value in self.all_embeddings.items():
-                self.all_embeddings[key] = self.all_embeddings[key].to(DEVICE)
+        else:
+            self.all_paths = [x for x in glob.glob(GLOBAL_DATA_PATH+'/*/*.jpg')]
 
     def __len__(self):
         return len(self.img_dir)
@@ -178,21 +177,21 @@ class GeoBrainDataset(Dataset):
         
         idx = self.id_translator[id]
 
-        img_path = self.img_dir.loc[idx]['path'].split('storage/')[1]
+        img_path = self.img_dir.loc[idx]['path']
 
         if '*' in img_path:
             force3pano = True
+            paths = [img_path.replace('*', x) for x in ['120', '240', '360']]
         else:
             force3pano = False
-
-        paths = [x for x in glob.glob('storage/'+img_path)]
+            paths = [img_path]
 
         if self.load_embeddings:
-            paths = [x.replace('storage/', '').replace('jpg', 'pt') for x in paths]
-            images = [self.all_embeddings[path][0, :] for path in paths]
+            paths = ['/'.join(x.rsplit('/', 2)[1:]).replace('jpg', 'pt') for x in paths]
+            images = [self.all_embeddings[path][0, :] for path in paths if path in self.all_embeddings]
 
             if len(images) > 1:
-                images = torch.stack(images, dim=3)
+                images = torch.stack(images, dim=1)
             else:
                 images = images[0]
 
@@ -203,7 +202,7 @@ class GeoBrainDataset(Dataset):
                     images = torch.cat((images,images[:, [0]]), dim=1)
         
         else:
-            images = [convert_tensor(Image.open(path)) for path in paths]
+            images = [convert_tensor(Image.open(path)) for path in paths if path in self.all_paths]
             if self.transform is not None:
                 images = [self.transform(image) for image in images]
 

@@ -22,21 +22,48 @@ from torchvision.models.feature_extraction import get_graph_node_names
 from PIL import Image
 import cv2
 
-from fastprogress.fastprogress import master_bar, progress_bar
-
 import warnings
 warnings.filterwarnings("ignore")
 
 from .utils import *
 
-def plot_loss_update(epoch, epochs, mb, train_loss):
-    x = range(epoch+1)
-    y = train_loss
-    graphs = [[x,train_loss]]
+from IPython.display import clear_output
+from matplotlib import pyplot as plt
+import numpy as np
+import collections
+import datetime
+import time
+
+def live_plot(y, time_till_finish, labels, epochs, figsize=(7,5)):
+
+    loss = {k:np.vstack([d[k] for d in y]) for k in y[0]}
+    y = np.concatenate(list(loss.values()), 1)
+
+    y = y / y[0, :]
+
+    epoch = y.shape[0]
+
+    clear_output(wait=True)
+    plt.figure(figsize=figsize)
+    plt.plot(y, label=labels)
+    plt.title(str(epoch)+'/'+str(epochs)+'; '+'Time till finish: '+time_till_finish)
+    plt.grid(True)
+    plt.xlabel('epoch')
+    plt.legend(loc='center left') # the plot evolves to the right
+    plt.show();
+
+def plot_loss_update(epoch, epochs, mb, loss):
+
+    loss = {k:np.vstack([d[k] for d in loss]) for k in loss[0]}
+
+    x = np.arange(epoch+1)
+    y = np.concatenate(list(loss.values()), 1)
+
+    graphs = [[x, y[:, j]] for j in range(y.shape[1])]
     x_margin = 0.2
     y_margin = 0.05
-    x_bounds = [1-x_margin, epochs+x_margin]
-    y_bounds = [np.min(y)-y_margin, np.max(y)+y_margin]
+    x_bounds = [0, epochs+x_margin]
+    y_bounds = [np.min(y, axis=None)-y_margin, np.max(y, axis=None)+y_margin]
 
     mb.update_graph(graphs, x_bounds, y_bounds)
 
@@ -121,6 +148,8 @@ class BRAIN:
         self.shp = None
         self.device = None
         self.optimizer = None
+        self.loss_multiplier = None
+        self.y_variable_names = None
 
     def prepare_system(self, countries=['AL']):
         
@@ -129,54 +158,73 @@ class BRAIN:
 
         self.select_indexes = np.arange(self.shp.index.shape[0])[self.shp.index.str.startswith(tuple(countries))]
         self.selected_indexes = torch.Tensor(self.select_indexes).to(torch.int32).to(self.device)
+
+        self.tasks_location = { v[0]: (k, v[1]) for k, l in self.NN.tasks.items() for v in l }
     
     def real_output_extract(self, data):
 
         real_output = {}
         
-        # level2 geolocation
+        generic_output = {}
+
         Hav_gi_xn = self.full_precompute[data[0], :][:, self.selected_indexes.long()]
         Hav_gn_xn = data[1][:, None].to(self.device)
         distance = Hav_gi_xn-Hav_gn_xn
         adj_distance = distance - torch.min(distance, dim=1, keepdim=True).values
-        real_y = torch.exp(-(adj_distance)/self.tau)
+        generic_output['geolocation'] = torch.exp(-(adj_distance)/self.tau)
 
-        real_output[2] = [real_y]
+        generic_output['side_tasks'] = [data[5][:, [j]] for j in range(data[5].shape[1])]
 
-        # level2 meteo+gdp data
-        real_output[1] = data[5]
+        # pack as instructed
 
+        for level in self.NN.tasks:
+
+            real_output[level] = [_ for _ in range(sum(self.NN.target_outputs[level]))]
+
+            for task in self.NN.tasks[level]:
+                
+                name, position = task
+
+                y = generic_output[name]
+                if type(y) is not list:
+                    y = [y]
+
+                real_output[level][position] = y
 
         return real_output
 
     def loss_calculator(self, model, real):
 
-        loss = 0
+        loss = {}
         for auxiliary_level in model:
 
             if auxiliary_level not in self.criterions:
                 continue
+                
+            loss[auxiliary_level] = []
 
-            if auxiliary_level == 1:
+            for i, loss_func in enumerate(self.criterions[auxiliary_level]):
 
-                for i, x in enumerate(self.criterions[auxiliary_level]):
-
-                    loss += 10*x(model[auxiliary_level][i][:, 0], real[auxiliary_level][:, i])
-            else:
-
-                for i, x in enumerate(self.criterions[auxiliary_level]):
-
-                    loss += x(model[auxiliary_level][i], real[auxiliary_level][i])
-
+                loss[auxiliary_level].append(self.loss_multiplier[auxiliary_level][i]* \
+                            loss_func(model[auxiliary_level][i], real[auxiliary_level][i]))
+                
         return loss
 
     def train(self, epochs=1):
 
         self.train_loss = []
-        for epoch in (pbar := master_bar(range(epochs))):  # loop over the dataset multiple times
+        self.train_loss_granular = []
+
+        variable_names_with_level = sum([[str(k)+'_'+y for y in self.y_variable_names[k]] for k in self.y_variable_names], [])
+
+        start_full_training = time.time()
+
+        for epoch in range(epochs):  # loop over the dataset multiple times
             
             running_loss = 0.0
-            for data in progress_bar(self.train_dataloader, parent=pbar):
+            running_loss_detailed = []
+
+            for data in self.train_dataloader:
 
                 inputs = data[0]
 
@@ -184,29 +232,59 @@ class BRAIN:
 
                 real_y = self.real_output_extract(data[1])
 
-                network_output_y = self.NN(inputs, mode='all')
-                loss = self.loss_calculator(network_output_y, real_y)
+                network_output_y = self.NN(inputs)
+                granular_loss = self.loss_calculator(network_output_y, real_y)
+                running_loss_detailed.append(granular_loss)
+
+                loss = sum([sum(granular_loss[k]) for k in granular_loss])
 
                 loss.backward()
                 self.optimizer.step()
 
                 running_loss += loss.item()
 
+            self.train_loss_granular.append({k:np.array([[y.detach().cpu() for y in x[k]] for x in running_loss_detailed]).sum(0) for k in running_loss_detailed[0]})
             self.train_loss.append(running_loss)
-            pbar.main_bar.comment = "Loss: "+str(running_loss)
-            plot_loss_update(epoch, epochs, pbar, self.train_loss)
+
+            time_since_beginning = time.time()-start_full_training
+            sec_per_epoch = time_since_beginning/(epoch+1)
+            time_still_seconds = (epochs-1-epoch)*sec_per_epoch
+            time_still = str(datetime.timedelta(seconds=time_still_seconds)).split('.')[0]
+
+            live_plot(self.train_loss_granular, time_still, variable_names_with_level, epochs)
     
-    def generate_test_main(self):
+    def generate_test_main(self, on='test'):
+
         self.total_occurences = []
+        self.total_sidetasks = []
         self.cords_list = []
 
-        for i, data in master_bar(enumerate(self.test_dataloader, 0), total=self.test_dataloader.__len__()):
+        if on=='test':
+            loader = self.test_dataloader
+        elif on=='train':
+            loader = self.train_dataloader
+
+        for i, data in enumerate(loader, 0):
             inputs = data[0].to(self.device)
             true_labels_name= data[1][4]
 
-            network_output_y = self.NN(inputs, mode='all')
-            model_labels_bin = torch.argmax(network_output_y[2][0], 1).cpu()
-            model_labels_name = self.shp.iloc[self.selected_indexes].iloc[model_labels_bin].index.values
+            network_output_y = self.NN(inputs)
+            model_labels_bin = torch.argmax(network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0], 1).cpu()
+            model_labels_name = self.shp.iloc[self.selected_indexes.cpu()].iloc[model_labels_bin].index.values
+            
+            real_y = self.real_output_extract(data[1])
+            # other tasks
+            for auxiliary_level in network_output_y:
+
+                if auxiliary_level not in self.criterions:
+                    continue
+
+                for i, _ in enumerate(self.criterions[auxiliary_level]):
+
+                    if self.y_variable_names[auxiliary_level][i] == 'geolocation':
+                        continue
+
+                    self.total_sidetasks.append((auxiliary_level, i, network_output_y[auxiliary_level][i], real_y[auxiliary_level][i]))
 
             self.total_occurences += list(zip(true_labels_name, model_labels_name))
 
@@ -251,22 +329,26 @@ class BRAIN:
 
         inputs = data[0].to(self.device)
 
-        true_id_haversine = self.full_precompute[data[1][0], :][:, self.selected_indexes]
-        y = torch.exp(-(true_id_haversine - (data[1][1][:, None]))/self.tau).to(self.device)
+        network_output_y = self.NN(inputs)
+        model_labels_bin = torch.argmax(
+            network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0], 
+            1).cpu()
+        
+        Hav_gi_xn = self.full_precompute[data[1][0], :][:, self.selected_indexes.long()]
+        Hav_gn_xn = data[1][1][:, None].to(self.device)
+        distance = Hav_gi_xn-Hav_gn_xn
+        adj_distance = distance - torch.min(distance, dim=1, keepdim=True).values
 
-        network_output_y = self.NN(inputs, mode='all')
-        model_labels_bin = torch.argmax(network_output_y[2][0], 1).cpu()
-
-        for ind in range(data[0].shape[0]): #data[0].shape[0]
+        for ind in range(data[0].shape[0]):
 
             labels.append(model_labels_bin[ind])
 
-            standard_penalize = -(y[ind]-y[ind].mean())/y[ind].std()
+            standard_penalize = -(adj_distance[ind]-adj_distance[ind].mean())/adj_distance[ind].std()
             standard_penalize += (-standard_penalize).max()
 
-            s1 = self.shp.iloc[self.selected_indexes]
+            s1 = self.shp.iloc[self.selected_indexes.cpu()]
             s1['penalize'] = standard_penalize.cpu()
-            s1['probability'] = network_output_y[2][0][ind].detach().cpu().numpy()
+            s1['probability'] = network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0][ind].detach().cpu().numpy()
 
             fig, ax = plt.subplots(1, 2, figsize=(60, 30))
 
@@ -281,8 +363,22 @@ class BRAIN:
             ax2.legend(title='probability', fontsize=15)
 
             results.append(fig)
+        
+        return results
 
+    def gradient_track(self, data):
         results_grad = []
+        labels = []
+
+        inputs = data[0].to(self.device)
+
+        network_output_y = self.NN(inputs)
+        model_labels_bin = torch.argmax(
+            network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0], 
+            1).cpu()
+        
+        for ind in range(data[0].shape[0]):
+            labels.append(model_labels_bin[ind])
 
         for param in self.NN.parameters():
             param.requires_grad = True
@@ -291,7 +387,7 @@ class BRAIN:
             inputs = data[0].to(self.device)
 
             self.NN.eval()
-            targets = [ClassifierOutputTarget(labels[ind])] 
+            targets = [ClassifierOutputTarget(labels[ind])]
             target_layers = [self.NN.barebone_model.trunk.patch_embed.proj]
 
             cam = GradCAM(model=self.NN, target_layers=target_layers) # use GradCamPlusPlus class
@@ -313,4 +409,4 @@ class BRAIN:
 
         self.NN._freeze_barebone_paremeters()
 
-        return results, results_grad
+        return results_grad

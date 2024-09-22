@@ -2,6 +2,8 @@ from .data_handling_classes import *
 from .config import *
 from .model_configurations import *
 
+from shapely import Polygon
+
 def process_data(shp, on_embedding=False):
 
     countries_t = system_configs[SYSTEM_ID]['COUNTRIES_T']
@@ -16,6 +18,11 @@ def process_data(shp, on_embedding=False):
         PMD.preprocess()
         shp = PMD.premerged_shapes
 
+        shp_bounded = shp.overlay(OPERATIONAL_BOUND, how='intersection')
+        shp_bounded['points'] = shp_bounded.sample_points(1)
+        shp_ = shp_bounded.set_geometry('points').sjoin(shp).drop(columns='points').set_index('NUTS_ID_ne')
+        shp = shp_.set_geometry('geometry')
+
     DC = DataContainer(shp, GLOBAL_DATA_PATH, countries_all)
     DC.load_pictures()
     DC.precalculateHaversineDist()
@@ -29,14 +36,14 @@ def process_data(shp, on_embedding=False):
     shp_n = np.array([*shp_n])
 
     DFO = DataFeederOperator(DC.pictures, list(countries_t), countries_all)
-    DFO.panorama = False
+    DFO.panorama = PANORAMA
     DFO.select_data()
     DFO.train_test_split(0.2)
 
     GBD = GeoBrainDataset(DFO.train_paths, load_embeddings=on_embedding)
     GBD_t = GeoBrainDataset(DFO.test_paths, load_embeddings=on_embedding)
 
-    train_dataloader = DataLoader(GBD, batch_size=100, shuffle=True)
-    test_dataloader = DataLoader(GBD_t, batch_size=100, shuffle=True)
+    train_dataloader = DataLoader(GBD, batch_size=500, shuffle=True)
+    test_dataloader = DataLoader(GBD_t, batch_size=500, shuffle=True)
 
     return train_dataloader, test_dataloader, pct_n, shp_n, pct, shp, countries_t

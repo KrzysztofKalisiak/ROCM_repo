@@ -8,6 +8,7 @@ import torch.optim as optim
 def first(l, _):
     return l[0]
 
+
 model_configs = {
 
     'ID1':{
@@ -23,10 +24,11 @@ model_configs = {
                                             [nn.Linear(1500, 1), nn.ReLU()],
                                             [nn.Linear(1500, 1), nn.ReLU()],
                                             [nn.Linear(1500, 1), nn.ReLU()],
+                                            [nn.Linear(1500, 1), nn.ReLU()],
                                             [nn.Linear(1500, 1), nn.ReLU()]
                                         ],
                                         [ 
-                                            [nn.Dropout(p=0.1), nn.Linear(1007, 1001),nn.Softmax(dim=1)]
+                                            [nn.Dropout(p=0.1), nn.Linear(1008, 1188),nn.Softmax(dim=1)]
                                         ]
                                     ],
         'unfreeze_basemodel_params_conf':slice(0, 0),
@@ -41,6 +43,10 @@ model_configs = {
                                 0:first,
                                 1:torch.cat,
                                 2:first
+                                },
+        'tasks':{
+                                1:['side_tasks'],
+                                2:['geolocation']
                                 }
         },
     'ID2':{
@@ -60,7 +66,7 @@ model_configs = {
                                             [nn.Linear(1500, 1), nn.ReLU()]
                                         ],
                                         [ 
-                                            [nn.Dropout(p=0.1), nn.Linear(1207, 1236)]
+                                            [nn.Dropout(p=0.1), nn.Linear(1207, 1188)]
                                         ],
                                         [
                                             [nn.Softmax(dim=1)]
@@ -69,7 +75,7 @@ model_configs = {
         'unfreeze_basemodel_params_conf':slice(0, 0),
         'preprocess':None,
         'optimizer':optim.AdamW,
-        'optimizer_params':{'lr':0.001},
+        'optimizer_params':{'lr':0.00005},
         'target_outputs':{
                             1:[False, True, True, True, True, True, True, True],
                             2:[True],
@@ -80,6 +86,76 @@ model_configs = {
                                 1:torch.cat,
                                 2:first,
                                 3:first
+                                },
+        'tasks':{
+                                1:['side_tasks'],
+                                2:['geolocation']
+                                }
+        },
+
+    'ID3':{
+        'basemodel':None,
+        'geolocation_model_extension':[
+                                        [
+                                            [nn.Linear(1152, 3000), nn.ReLU()],
+                                            [nn.Linear(1152, 1), nn.ReLU()],
+                                            [nn.Linear(1152, 1), nn.ReLU()],
+                                            [nn.Linear(1152, 1), nn.ReLU()],
+                                            [nn.Linear(1152, 1), nn.ReLU()],
+                                            [nn.Linear(1152, 1), nn.ReLU()],
+                                            [nn.Linear(1152, 1), nn.ReLU()],
+                                            [nn.Linear(1152, 1), nn.ReLU()]
+                                        ],
+                                        [ 
+                                            [nn.Dropout(p=0.1), nn.Linear(3007, 1188)]
+                                        ],
+                                        [
+                                            [nn.Softmax(dim=1)]
+                                        ]
+                                    ],
+        'unfreeze_basemodel_params_conf':slice(0, 0),
+        'preprocess':None,
+        'optimizer':optim.AdamW,
+        'optimizer_params':{'lr':0.0001},
+        'target_outputs':{
+                            0:[False, True, True, True, True, True, True, True],
+                            1:[True],
+                            2:[True]
+                        },
+        'concurrent_reduction':{
+                                0:torch.cat,
+                                1:first,
+                                2:first
+                                },
+        'tasks':{
+                                0:[('side_tasks', slice(0, 6))],
+                                1:[('geolocation', slice(0, 1))]
+                                }
+        },
+    'ID4':{
+        'basemodel':None,
+        'geolocation_model_extension':[
+                                        [
+                                            [nn.Linear(1152, 1188), nn.ReLU()]
+                                        ],
+                                        [
+                                            [nn.Softmax(dim=1)]
+                                        ]
+                                    ],
+        'unfreeze_basemodel_params_conf':slice(0, 0),
+        'preprocess':None,
+        'optimizer':optim.AdamW,
+        'optimizer_params':{'lr':0.0005},
+        'target_outputs':{
+                            0:[True, False, False, False, False, False, False, False],
+                            1:[True]
+                        },
+        'concurrent_reduction':{
+                                0:first,
+                                1:first
+                                },
+        'tasks':{
+                                0:[('geolocation', slice(0, 1))]
                                 }
         }
 }
@@ -112,5 +188,46 @@ system_configs = {
         'model_ID':'ID2',
         'predefined_region_grid':None,
         'on_embeddings':'ViT-SO400M-14-SigLIP-384'
+        },
+
+    'SYS3':{
+        "auxiliary_loss":{
+                          0:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
+                          1:[nn.CrossEntropyLoss()]
+                        },
+        "loss_multiplier":{
+                          0:[1, 1, 1, 1, 1, 1, 1],
+                          1:[1]
+                        },
+        "tau":150,
+        'COUNTRIES_T':None,
+        'blur_system':None,
+        'save_system':True,
+        'model_ID':'ID3',
+        'predefined_region_grid':None,
+        'on_embeddings':'ViT-SO400M-14-SigLIP-384',
+        'variable_names':{
+            0:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
+            1:['geolocation'] # 'solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'
+        }
+        },
+
+    'SYS4':{
+        "auxiliary_loss":{
+                          0:[nn.CrossEntropyLoss()]
+                        },
+        "loss_multiplier":{
+                          0:[1]
+                        },
+        "tau":150,
+        'COUNTRIES_T':None,
+        'blur_system':None,
+        'save_system':True,
+        'model_ID':'ID4',
+        'predefined_region_grid':None,
+        'on_embeddings':'ViT-SO400M-14-SigLIP-384',
+        'variable_names':{
+            0:['geolocation'] # 'solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'
+        }
         }
 }
