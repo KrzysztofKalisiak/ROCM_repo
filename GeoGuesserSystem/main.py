@@ -232,8 +232,9 @@ class BRAIN:
 
                 real_y = self.real_output_extract(data[1])
 
-                network_output_y = self.NN(inputs)
-                granular_loss = self.loss_calculator(network_output_y, real_y)
+                with torch.autocast(device_type='cuda', dtype=torch.float16):
+                    network_output_y = self.NN(inputs)
+                    granular_loss = self.loss_calculator(network_output_y, real_y)
                 running_loss_detailed.append(granular_loss)
 
                 loss = sum([sum(granular_loss[k]) for k in granular_loss])
