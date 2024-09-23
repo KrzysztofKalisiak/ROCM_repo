@@ -157,6 +157,50 @@ model_configs = {
         'tasks':{
                                 0:[('geolocation', slice(0, 1))]
                                 }
+        },
+        'ID5':{
+        'basemodel':None,
+        'geolocation_model_extension':[
+                                       [
+                                            [nn.Linear(1152, 6000), nn.ReLU()]
+                                        ],
+                                        [
+                                            [nn.Linear(6000, 9000)],
+                                            [nn.Linear(6000, 1)],
+                                            [nn.Linear(6000, 1)],
+                                            [nn.Linear(6000, 1)],
+                                            [nn.Linear(6000, 1)],
+                                            [nn.Linear(6000, 1)],
+                                            [nn.Linear(6000, 1)],
+                                            [nn.Linear(6000, 1)]
+                                        ],
+                                        [ 
+                                            [nn.ReLU(), nn.Dropout(p=0.1), nn.Linear(9007, 1188)]
+                                        ],
+                                        [
+                                            [nn.Softmax(dim=1)]
+                                        ]
+                                    ],
+        'unfreeze_basemodel_params_conf':slice(0, 0),
+        'preprocess':None,
+        'optimizer':optim.AdamW,
+        'optimizer_params':{'lr':0.0001},
+        'target_outputs':{
+                            0:[False],
+                            1:[False, True, True, True, True, True, True, True],
+                            2:[True],
+                            3:[True]
+                        },
+        'concurrent_reduction':{
+                                0:torch.cat,
+                                1:torch.cat,
+                                2:first,
+                                3:first
+                                },
+        'tasks':{
+                                1:[('side_tasks', slice(0, 6))],
+                                2:[('geolocation', slice(0, 1))]
+                                }
         }
 }
 
@@ -229,5 +273,27 @@ system_configs = {
         'variable_names':{
             0:['geolocation'] # 'solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'
         }
+        },
+
+    'SYS5':{
+        "auxiliary_loss":{
+                          1:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
+                          2:[nn.CrossEntropyLoss()]
+                        },
+        "loss_multiplier":{
+                          1:[1, 1, 1, 1, 1, 1, 1],
+                          2:[1]
+                        },
+        "tau":150,
+        'COUNTRIES_T':None,
+        'blur_system':None,
+        'save_system':True,
+        'model_ID':'ID5',
+        'predefined_region_grid':None,
+        'on_embeddings':'ViT-SO400M-14-SigLIP-384',
+        'variable_names':{
+            1:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
+            2:['geolocation'] # 'solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'
         }
+        },
 }
