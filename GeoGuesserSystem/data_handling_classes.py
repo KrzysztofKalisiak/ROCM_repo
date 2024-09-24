@@ -168,7 +168,7 @@ class GeoBrainDataset(Dataset):
             self.target_dir = 'embeddings/%s' % self.load_embeddings
             self.all_embeddings = torch.load(self.target_dir + '/all_embeddings.pt')
         else:
-            self.all_paths = [x for x in glob.glob(GLOBAL_DATA_PATH+'/*/*.jpg')]
+            self.all_paths = set([x for x in glob.glob(GLOBAL_DATA_PATH+'/*/*.jpg')])
 
     def __len__(self):
         return len(self.img_dir)
