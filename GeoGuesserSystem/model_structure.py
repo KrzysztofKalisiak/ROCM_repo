@@ -60,8 +60,8 @@ class GeoBrainNetwork(nn.Module):
         
             if x.dim() == 5: # panorama
 
-                x_ = torch.stack([self.barebone_model(self.preprocess_func(x[:, :, :, :, ij])) for ij in range(x.shape[4])])
-                x = torch.mean(x_, dim=4)
+                x_ = torch.stack([self.barebone_model(self.preprocess_func(x[:, :, :, :, ij])) for ij in range(x.shape[4])], dim=2)
+                x = torch.mean(x_, dim=2)
 
             else: # no panorama
                 
@@ -144,7 +144,7 @@ def system_loader(force_override=False):
         premerged_shapes = None
 
 
-    train_dataloader, test_dataloader, pct_n, shp_n, pct, shp, countries = process_data(premerged_shapes, system_conf['on_embeddings'])
+    train_dataloader, test_dataloader, pct_n, shp_n, pct, shp, countries = process_data(premerged_shapes, system_conf['on_embeddings'], batch_size=system_conf['batch_size'])
 
     model, optimizer = model_loader(system_configs[SYSTEM_ID]['model_ID'])
 

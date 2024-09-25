@@ -1,6 +1,8 @@
 from GeoGuesserSystem import *
 
-BR = system_loader()
+if __name__ == '__main__':
 
-BR.train(100)
-save_system(BR)
+    BR = system_loader()
+
+    BR.train(100)
+    save_system(BR)

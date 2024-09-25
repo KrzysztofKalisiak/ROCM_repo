@@ -26,6 +26,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from .utils import *
+from .cam import CAM, GradCAM, GradCAMpp, SmoothGradCAMpp, ScoreCAM
+from .visualize import visualize, reverse_normalize
+from .imagenet_labels import label2idx, idx2label
 
 from IPython.display import clear_output
 from matplotlib import pyplot as plt
@@ -33,6 +36,8 @@ import numpy as np
 import collections
 import datetime
 import time
+
+import tqdm
 
 def live_plot(y, time_till_finish, labels, epochs, figsize=(7,5)):
 
@@ -219,7 +224,7 @@ class BRAIN:
 
         start_full_training = time.time()
 
-        for epoch in range(epochs):  # loop over the dataset multiple times
+        for epoch in tqdm.tqdm(range(epochs)):  # loop over the dataset multiple times
             
             running_loss = 0.0
             running_loss_detailed = []
@@ -232,9 +237,10 @@ class BRAIN:
 
                 real_y = self.real_output_extract(data[1])
 
-                with torch.autocast(device_type='cuda', dtype=torch.float16):
-                    network_output_y = self.NN(inputs)
-                    granular_loss = self.loss_calculator(network_output_y, real_y)
+                #with torch.autocast(device_type='cuda'):
+                network_output_y = self.NN(inputs)
+                granular_loss = self.loss_calculator(network_output_y, real_y)
+
                 running_loss_detailed.append(granular_loss)
 
                 loss = sum([sum(granular_loss[k]) for k in granular_loss])
@@ -285,12 +291,56 @@ class BRAIN:
                     if self.y_variable_names[auxiliary_level][i] == 'geolocation':
                         continue
 
-                    self.total_sidetasks.append((auxiliary_level, i, network_output_y[auxiliary_level][i], real_y[auxiliary_level][i]))
+                    self.total_sidetasks.append((data[1][0], torch.Tensor([auxiliary_level]*data[1][0].size(0)), torch.Tensor([i]*data[1][0].size(0)), network_output_y[auxiliary_level][i][:, 0], real_y[auxiliary_level][i][:, 0]))
 
             self.total_occurences += list(zip(true_labels_name, model_labels_name))
 
             cords = list(zip(data[1][2].tolist(), data[1][3].tolist()))
             self.cords_list += cords
+        
+        x1 = np.concatenate([np.vstack([y.detach().cpu().numpy() for y in x]) for x in self.total_sidetasks], 1)
+        x2 = pd.DataFrame(x1.T, columns=['id', 'aux_lvl', 'lvl', 'pred', 'real'])
+        x2['lvl'] = x2['lvl'].apply(lambda x: self.y_variable_names[1][int(x)])
+        x2 = x2.drop(columns='aux_lvl').set_index(['id', 'lvl']).unstack(-1)
+        x2.columns = x2.columns.swaplevel(0, 1)
+        self.side_task_summary = x2.sort_index(axis=1)
+
+        geolocation_task = pd.DataFrame(self.total_occurences, 
+                                        columns=pd.MultiIndex.from_tuples([('geolocation', 'real'), ('geolocation', 'pred')]), 
+                                        index=self.side_task_summary.index)
+        
+        self.task_summary = self.side_task_summary.join(geolocation_task).sort_index(axis=1)
+
+    def extract_photo(self, idx):
+
+        if self.train_dataloader.dataset.load_embeddings:
+            print('To extract photo full model is needed, this one is on embeddings')
+            return None
+            
+        try:
+            id = np.where(self.train_dataloader.dataset.id_translator == idx)[0][0]
+            dataset = self.train_dataloader.dataset
+            source = 'train'
+        except:
+            id = np.where(self.test_dataloader.dataset.id_translator == idx)[0][0]
+            dataset = self.test_dataloader.dataset
+            source = 'test'
+
+        if dataset[id][0].dim()==4:
+            res = []
+            for j in range(3):
+                res.append(dataset[id][0][:, :, :, j].cpu().numpy().transpose(1, 2, 0))
+            res = np.hstack(res)
+            fig = plt.figure(figsize = (10,10))
+            plt.imshow(res, interpolation='nearest')
+            plt.title(source+' '+dataset[id][1][4])
+        else:
+            res = dataset[id][0][:, :, :].cpu().numpy().transpose(1, 2, 0)
+            fig = plt.figure(figsize = (10,10))
+            plt.imshow(res, interpolation='nearest')
+            plt.title(source+' '+dataset[id][1][4])
+        
+        return fig
 
     def metrics_and_plots(self, level=1, if_plot_predicted_point=True):
         occurences2, colors2, shp2, df12 = precision_level_set(self.total_occurences, self.shp, level)
@@ -323,91 +373,64 @@ class BRAIN:
             
             plot_predicted_points(shp2, colors2, occurences2, df12, self.cords_list);
 
-    def asses_photos(self, data):
+    def asses_photo(self, data):
 
-        results = []
-        labels = []
-
-        inputs = data[0].to(self.device)
+        inputs = data[0].to(self.device)[None, ...]
 
         network_output_y = self.NN(inputs)
-        model_labels_bin = torch.argmax(
-            network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0], 
-            1).cpu()
-        
-        Hav_gi_xn = self.full_precompute[data[1][0], :][:, self.selected_indexes.long()]
-        Hav_gn_xn = data[1][1][:, None].to(self.device)
+
+        Hav_gi_xn = self.full_precompute[data[1][0], :][self.selected_indexes.long()]
+        Hav_gn_xn = data[1][1]
         distance = Hav_gi_xn-Hav_gn_xn
-        adj_distance = distance - torch.min(distance, dim=1, keepdim=True).values
 
-        for ind in range(data[0].shape[0]):
+        adj_distance = distance - torch.min(distance, dim=0, keepdim=True).values
+        standard_penalize = -(adj_distance-adj_distance.mean())/adj_distance.std()
+        standard_penalize += (-standard_penalize).max()
 
-            labels.append(model_labels_bin[ind])
+        s1 = self.shp.iloc[self.selected_indexes.cpu()]
+        s1['penalize'] = standard_penalize.cpu()
+        s1['probability'] = network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0][0].detach().cpu().numpy()
 
-            standard_penalize = -(adj_distance[ind]-adj_distance[ind].mean())/adj_distance[ind].std()
-            standard_penalize += (-standard_penalize).max()
+        fig, ax = plt.subplots(1, 2, figsize=(60, 30))
 
-            s1 = self.shp.iloc[self.selected_indexes.cpu()]
-            s1['penalize'] = standard_penalize.cpu()
-            s1['probability'] = network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0][ind].detach().cpu().numpy()
+        ax1 = s1.plot(ax=ax[0], column='penalize', cmap='bone', edgecolors='black', legend=True, linewidth=0.2)
+        ax1.scatter(data[1][2], data[1][3], edgecolors='black', linewidth=0.2)
+        ax1.legend(title='Loss', fontsize=15)
 
-            fig, ax = plt.subplots(1, 2, figsize=(60, 30))
-
-            cords = list(zip(data[1][2].tolist(), data[1][3].tolist()))
-
-            ax1 = s1.plot(ax=ax[0], column='penalize', cmap='bone', edgecolors='black', legend=True, linewidth=0.2)
-            ax1.scatter(cords[ind][0], cords[ind][1], edgecolors='black', linewidth=0.2)
-            ax1.legend(title='Loss', fontsize=15)
-
-            ax2 = s1.plot(ax=ax[1], column='probability', cmap='OrRd', edgecolors='black', legend=True, linewidth=0.2)
-            ax2.scatter(cords[ind][0], cords[ind][1], edgecolors='black', linewidth=0.2)
-            ax2.legend(title='probability', fontsize=15)
-
-            results.append(fig)
+        ax2 = s1.plot(ax=ax[1], column='probability', cmap='OrRd', edgecolors='black', legend=True, linewidth=0.2)
+        ax2.scatter(data[1][2], data[1][3], edgecolors='black', linewidth=0.2)
+        ax2.legend(title='probability', fontsize=15)
         
-        return results
+        return fig
 
-    def gradient_track(self, data):
-        results_grad = []
-        labels = []
+    def gradient_track(self, data, auxiliary_lvl=1, lvl=3):
 
-        inputs = data[0].to(self.device)
+        class CNet(nn.Module):
+            def __init__(self, NN):
+                super().__init__()
 
-        network_output_y = self.NN(inputs)
-        model_labels_bin = torch.argmax(
-            network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0], 
-            1).cpu()
-        
-        for ind in range(data[0].shape[0]):
-            labels.append(model_labels_bin[ind])
+                self.NN = NN
 
-        for param in self.NN.parameters():
-            param.requires_grad = True
+            def forward(self, x):
 
-        for ind in range(data[0].shape[0]):
-            inputs = data[0].to(self.device)
+                return self.NN(x)[auxiliary_lvl][lvl]
+            
+        NNC = CNet(self.NN).to('cuda')
 
-            self.NN.eval()
-            targets = [ClassifierOutputTarget(labels[ind])]
-            target_layers = [self.NN.barebone_model.trunk.patch_embed.proj]
+        res = []
 
-            cam = GradCAM(model=self.NN, target_layers=target_layers) # use GradCamPlusPlus class
+        target_layer = NNC.NN.barebone_model.trunk.patch_embed.proj
+        wrapped_model = ScoreCAM(NNC, target_layer)
 
-            # Preprocess input image, get the input image tensor
-            img = np.swapaxes(np.swapaxes(inputs.detach().cpu().numpy()[ind, :, :, :], 0, 2), 0, 1)
-            input_tensor = preprocess_image(img)
+        for i in tqdm.tqdm(range(3)):
+            cam, idx = wrapped_model(data[0][None, :, :, :, i])
 
-            # generate CAM
-            grayscale_cams = cam(input_tensor=input_tensor, targets=targets)
-            cam_image = show_cam_on_image(img, grayscale_cams[0, :], use_rgb=True)
+            heatmap = visualize(data[0][None, :, :, :, i], cam)
+            hm = (heatmap.squeeze().numpy().transpose(1, 2, 0))
 
-            cam = np.uint8(255*grayscale_cams[0, :])
-            cam = cv2.merge([cam, cam, cam])
+            res.append(hm)
 
-            # display the original image & the associated CAM
-            images = np.hstack((np.uint8(255*img), cam_image))
-            results_grad.append(Image.fromarray(images))
+        plt.figure(figsize = (20,20))
+        plt.imshow(np.hstack(res), interpolation='nearest')
 
-        self.NN._freeze_barebone_paremeters()
-
-        return results_grad
+        return np.hstack(res)

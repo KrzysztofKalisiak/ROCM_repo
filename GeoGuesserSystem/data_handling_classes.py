@@ -24,6 +24,8 @@ warnings.filterwarnings("ignore")
 
 from .config import *
 
+torch.multiprocessing.set_start_method('spawn', force=True)
+
 
 class PreMergerData:
     def __init__(self, full_pictures_path, countries, settings):
@@ -174,61 +176,61 @@ class GeoBrainDataset(Dataset):
         return len(self.img_dir)
 
     def __getitem__(self, id):
-        
-        idx = self.id_translator[id]
+        with torch.no_grad():
+            idx = self.id_translator[id]
 
-        img_path = self.img_dir.loc[idx]['path']
+            img_path = self.img_dir.loc[idx]['path']
 
-        if '*' in img_path:
-            force3pano = True
-            paths = [img_path.replace('*', x) for x in ['120', '240', '360']]
-        else:
-            force3pano = False
-            paths = [img_path]
-
-        if self.load_embeddings:
-            paths = ['/'.join(x.rsplit('/', 2)[1:]).replace('jpg', 'pt') for x in paths]
-            images = [self.all_embeddings[path][0, :] for path in paths if path in self.all_embeddings]
-
-            if len(images) > 1:
-                images = torch.stack(images, dim=1)
+            if '*' in img_path:
+                force3pano = True
+                paths = [img_path.replace('*', x) for x in ['120', '240', '360']]
             else:
-                images = images[0]
+                force3pano = False
+                paths = [img_path]
 
-            if force3pano:
-                if images.dim() == 1:
-                    images = torch.stack((images,images,images), dim=1)
-                elif images.dim() == 2 and images.shape[1] == 2:
-                    images = torch.cat((images,images[:, [0]]), dim=1)
-        
-        else:
-            images = [convert_tensor(Image.open(path)) for path in paths if path in self.all_paths]
-            if self.transform is not None:
-                images = [self.transform(image) for image in images]
+            if self.load_embeddings:
+                paths = ['/'.join(x.rsplit('/', 2)[1:]).replace('jpg', 'pt') for x in paths]
+                images = [self.all_embeddings[path][0, :] for path in paths if path in self.all_embeddings]
 
-            if len(images) > 1:
-                images = torch.stack(images, dim=3)
+                if len(images) > 1:
+                    images = torch.stack(images, dim=1)
+                else:
+                    images = images[0]
+
+                if force3pano:
+                    if images.dim() == 1:
+                        images = torch.stack((images,images,images), dim=1)
+                    elif images.dim() == 2 and images.shape[1] == 2:
+                        images = torch.cat((images,images[:, [0]]), dim=1)
+            
             else:
-                images = images[0]
+                images = [convert_tensor(Image.open(path)) for path in paths if path in self.all_paths]
+                if self.transform is not None:
+                    images = [self.transform(image) for image in images]
 
-            if force3pano:
-                if images.dim() == 3:
-                    images = torch.stack((images,images,images), dim=3)
-                elif images.dim() == 4 and images.shape[3] == 2:
-                    images = torch.cat((images,images[:, :, :, [0]]), dim=3)
+                if len(images) > 1:
+                    images = torch.stack(images, dim=3).to(DEVICE)
+                else:
+                    images = images[0].to(DEVICE)
 
-        d_t_c = self.img_dir.loc[idx]['distance_to_centroid']
+                if force3pano:
+                    if images.dim() == 3:
+                        images = torch.stack((images,images,images), dim=3)
+                    elif images.dim() == 4 and images.shape[3] == 2:
+                        images = torch.cat((images,images[:, :, :, [0]]), dim=3)
 
-        if self.target_transform is not None:
-          idx, d_t_c  = self.target_transform(idx, d_t_c)
+            d_t_c = self.img_dir.loc[idx]['distance_to_centroid']
 
-        oth_data_meteo = torch.Tensor(self.meteo_data.loc[idx].values) # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
-        oth_data_gdp = torch.Tensor(self.GDP_data.loc[idx].values)
+            if self.target_transform is not None:
+                idx, d_t_c  = self.target_transform(idx, d_t_c)
 
-        return images, (
-                        idx, d_t_c, 
-                        self.img_dir.loc[idx]['geometry'].x, 
-                        self.img_dir.loc[idx]['geometry'].y, 
-                        self.img_dir.loc[idx]['NUTS_ID_fin'], 
-                        torch.cat((oth_data_meteo, oth_data_gdp)).to(DEVICE)
-                        )
+            oth_data_meteo = torch.Tensor(self.meteo_data.loc[idx].values) # solar radiation,min_temp,max_temp,precipitation,wind_speed,water vapour pressure
+            oth_data_gdp = torch.Tensor(self.GDP_data.loc[idx].values)
+
+            return images, (
+                            idx, d_t_c, 
+                            self.img_dir.loc[idx]['geometry'].x, 
+                            self.img_dir.loc[idx]['geometry'].y, 
+                            self.img_dir.loc[idx]['NUTS_ID_fin'], 
+                            torch.cat((oth_data_meteo, oth_data_gdp)).to(DEVICE)
+                            )
