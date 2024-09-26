@@ -144,14 +144,14 @@ def system_loader(force_override=False):
         premerged_shapes = None
 
 
-    train_dataloader, test_dataloader, pct_n, shp_n, pct, shp, countries = process_data(premerged_shapes, system_conf['on_embeddings'], batch_size=system_conf['batch_size'])
+    train_dataset, test_dataset, pct_n, shp_n, pct, shp, countries = process_data(premerged_shapes, system_conf['on_embeddings'])
 
     model, optimizer = model_loader(system_configs[SYSTEM_ID]['model_ID'])
 
     BR = BRAIN()
     BR.NN = model.to(DEVICE)
-    BR.train_dataloader = train_dataloader
-    BR.test_dataloader = test_dataloader
+    BR.train_dataset = train_dataset
+    BR.test_dataset = test_dataset
     BR.loss = system_conf['auxiliary_loss']
     BR.loss_multiplier = system_conf['loss_multiplier']
     BR.tau = system_conf['tau']
@@ -162,6 +162,7 @@ def system_loader(force_override=False):
     BR.device = DEVICE
     BR.optimizer = optimizer
     BR.y_variable_names = system_conf['variable_names']
+    BR.batch_size=system_conf['batch_size']
 
     BR.prepare_system(list(countries))
 
@@ -175,5 +176,8 @@ def save_system(BR):
             }, GLOBAL_MODELS_PATH+system_configs[SYSTEM_ID]['model_ID']+'.pt')
 
     with open(GLOBAL_SYSTEMS_PATH+SYSTEM_ID+'.pkl', 'wb') as f:
+
+        BR.train_dataloader = None
+        BR.test_dataloader = None
 
         pickle.dump(BR, f)

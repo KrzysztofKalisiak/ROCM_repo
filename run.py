@@ -3,6 +3,6 @@ from GeoGuesserSystem import *
 if __name__ == '__main__':
 
     BR = system_loader()
-
-    BR.train(100)
+    BR.prepare_dataloaders()
+    BR.train(50)
     save_system(BR)

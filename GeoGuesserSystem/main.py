@@ -13,6 +13,8 @@ import torch.optim as optim
 import torch.nn as nn
 import torch
 
+from torch.utils.data import Dataset, DataLoader
+
 from shapely.plotting import plot_polygon
 
 from pytorch_grad_cam import GradCAM
@@ -145,6 +147,8 @@ class BRAIN:
         self.NN = None
         self.train_dataloader = None
         self.test_dataloader = None
+        self.train_dataset = None
+        self.test_dataset = None
         self.loss = None
         self.tau = None
         self.pct_n = None
@@ -155,6 +159,7 @@ class BRAIN:
         self.optimizer = None
         self.loss_multiplier = None
         self.y_variable_names = None
+        self.batch_size = None
 
     def prepare_system(self, countries=['AL']):
         
@@ -165,6 +170,11 @@ class BRAIN:
         self.selected_indexes = torch.Tensor(self.select_indexes).to(torch.int32).to(self.device)
 
         self.tasks_location = { v[0]: (k, v[1]) for k, l in self.NN.tasks.items() for v in l }
+
+    def prepare_dataloaders(self):
+
+        self.train_dataloader = DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=5, persistent_workers=True, multiprocessing_context='spawn', shuffle=True)
+        self.test_dataloader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True)
     
     def real_output_extract(self, data):
 
@@ -214,8 +224,29 @@ class BRAIN:
                             loss_func(model[auxiliary_level][i], real[auxiliary_level][i]))
                 
         return loss
+    
+    def accuracy_calc(self):
+
+        self.generate_test_main(on='test')
+        tt = self.task_summary['geolocation'].copy()
+        tt = tt.applymap(lambda x: x[:2])
+        tt = tt.groupby('real')['pred'].value_counts().unstack(-1)
+        tt = tt.reindex(tt.index, axis=1).fillna(0)
+        test_acc = np.diag(tt).sum()/np.sum(tt.values, axis=None)
+
+        self.generate_test_main(on='train')
+        tt = self.task_summary['geolocation'].copy()
+        tt = tt.applymap(lambda x: x[:2])
+        tt = tt.groupby('real')['pred'].value_counts().unstack(-1)
+        tt = tt.reindex(tt.index, axis=1).fillna(0)
+        train_acc = np.diag(tt).sum()/np.sum(tt.values, axis=None)
+
+        return test_acc, train_acc
 
     def train(self, epochs=1):
+
+        if self.train_dataloader is None:
+            self.prepare_dataloaders()
 
         self.train_loss = []
         self.train_loss_granular = []
@@ -257,6 +288,11 @@ class BRAIN:
             sec_per_epoch = time_since_beginning/(epoch+1)
             time_still_seconds = (epochs-1-epoch)*sec_per_epoch
             time_still = str(datetime.timedelta(seconds=time_still_seconds)).split('.')[0]
+
+            if epoch % 10 == 0:
+                test_acc, train_acc = self.accuracy_calc()
+
+                print(epoch, train_acc, test_acc)
 
             live_plot(self.train_loss_granular, time_still, variable_names_with_level, epochs)
     

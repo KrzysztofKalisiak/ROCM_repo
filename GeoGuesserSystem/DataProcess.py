@@ -4,7 +4,7 @@ from .model_configurations import *
 
 from shapely import Polygon
 
-def process_data(shp, on_embedding=False, batch_size=500):
+def process_data(shp, on_embedding=False):
 
     countries_t = system_configs[SYSTEM_ID]['COUNTRIES_T']
 
@@ -43,7 +43,4 @@ def process_data(shp, on_embedding=False, batch_size=500):
     GBD = GeoBrainDataset(DFO.train_paths, load_embeddings=on_embedding)
     GBD_t = GeoBrainDataset(DFO.test_paths, load_embeddings=on_embedding)
 
-    train_dataloader = DataLoader(GBD, batch_size=batch_size, shuffle=True)
-    test_dataloader = DataLoader(GBD_t, batch_size=batch_size, shuffle=True)
-
-    return train_dataloader, test_dataloader, pct_n, shp_n, pct, shp, countries_t
+    return GBD, GBD_t, pct_n, shp_n, pct, shp, countries_t

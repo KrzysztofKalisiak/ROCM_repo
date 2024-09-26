@@ -14,6 +14,6 @@ GLOBAL_SYSTEMS_PATH = '/home/krzysztof-kalisiak/Desktop/ROCM_repo/_SYSTEMS_/'
 
 DEVICE = 'cuda'
 
-SYSTEM_ID = 'SYS6'
+SYSTEM_ID = 'SYS7'
 
 PANORAMA = True

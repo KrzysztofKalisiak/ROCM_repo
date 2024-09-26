@@ -24,8 +24,6 @@ warnings.filterwarnings("ignore")
 
 from .config import *
 
-torch.multiprocessing.set_start_method('spawn', force=True)
-
 
 class PreMergerData:
     def __init__(self, full_pictures_path, countries, settings):
