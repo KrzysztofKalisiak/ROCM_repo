@@ -173,7 +173,7 @@ class BRAIN:
 
     def prepare_dataloaders(self):
 
-        self.train_dataloader = DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=5, persistent_workers=True, multiprocessing_context='spawn', shuffle=True)
+        self.train_dataloader = DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=4, persistent_workers=True, multiprocessing_context='spawn', shuffle=True)
         self.test_dataloader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True)
     
     def real_output_extract(self, data):
@@ -289,10 +289,10 @@ class BRAIN:
             time_still_seconds = (epochs-1-epoch)*sec_per_epoch
             time_still = str(datetime.timedelta(seconds=time_still_seconds)).split('.')[0]
 
-            if epoch % 10 == 0:
-                test_acc, train_acc = self.accuracy_calc()
+            #if epoch % 10 == 0:
+            #    test_acc, train_acc = self.accuracy_calc()
 
-                print(epoch, train_acc, test_acc)
+            #    print(epoch, train_acc, test_acc)
 
             live_plot(self.train_loss_granular, time_still, variable_names_with_level, epochs)
     
