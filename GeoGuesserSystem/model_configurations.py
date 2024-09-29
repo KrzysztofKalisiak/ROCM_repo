@@ -136,7 +136,7 @@ model_configs = {
         'basemodel':None,
         'geolocation_model_extension':[
                                         [
-                                            [nn.Linear(1152, 1188), nn.ReLU()]
+                                            [nn.Linear(1152, 1188)]
                                         ],
                                         [
                                             [nn.Softmax(dim=1)]
@@ -147,7 +147,7 @@ model_configs = {
         'optimizer':optim.AdamW,
         'optimizer_params':{'lr':0.0005},
         'target_outputs':{
-                            0:[True, False, False, False, False, False, False, False],
+                            0:[True],
                             1:[True]
                         },
         'concurrent_reduction':{
@@ -161,21 +161,18 @@ model_configs = {
         'ID5':{
         'basemodel':None,
         'geolocation_model_extension':[
-                                       [
-                                            [nn.Linear(1152, 6000), nn.ReLU()]
-                                        ],
                                         [
-                                            [nn.Linear(6000, 9000)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)]
+                                            [nn.Linear(1152, 9000)],
+                                            [nn.Linear(1152, 1)],
+                                            [nn.Linear(1152, 1)],
+                                            [nn.Linear(1152, 1)],
+                                            [nn.Linear(1152, 1)],
+                                            [nn.Linear(1152, 1)],
+                                            [nn.Linear(1152, 1)],
+                                            [nn.Linear(1152, 1)]
                                         ],
                                         [ 
-                                            [nn.ReLU(), nn.Dropout(p=0.1), nn.Linear(9007, 1188)]
+                                            [nn.ReLU(), nn.Dropout(p=0.2), nn.Linear(9007, 1188)]
                                         ],
                                         [
                                             [nn.Softmax(dim=1)]
@@ -186,20 +183,18 @@ model_configs = {
         'optimizer':optim.AdamW,
         'optimizer_params':{'lr':0.0001},
         'target_outputs':{
-                            0:[False],
-                            1:[False, True, True, True, True, True, True, True],
-                            2:[True],
-                            3:[True]
+                            0:[False, True, True, True, True, True, True, True],
+                            1:[True],
+                            2:[True]
                         },
         'concurrent_reduction':{
                                 0:torch.cat,
-                                1:torch.cat,
-                                2:first,
-                                3:first
+                                1:first,
+                                2:first
                                 },
         'tasks':{
-                                1:[('side_tasks', slice(0, 6))],
-                                2:[('geolocation', slice(0, 1))]
+                                0:[('side_tasks', slice(0, 6))],
+                                1:[('geolocation', slice(0, 1))]
                                 }
         },
         'ID5_full':{
@@ -250,7 +245,7 @@ model_configs = {
         'basemodel':None,
         'geolocation_model_extension':[
                                        [
-                                            [nn.Dropout(p=0.1), nn.Linear(1152, 3000), nn.Dropout(p=0.1), nn.ReLU()] # , nn.Dropout(p=0.1)
+                                            [nn.Dropout(p=0.1), nn.Linear(1152, 3000), nn.Dropout(p=0.2), nn.ReLU()] # , nn.Dropout(p=0.1)
                                         ],
                                         [
                                             [nn.Linear(3000, 5000)],
@@ -263,7 +258,7 @@ model_configs = {
                                             [nn.Linear(3000, 1)]
                                         ],
                                         [ 
-                                            [nn.ReLU(), nn.Dropout(p=0.1), nn.Linear(5007, 1188)]
+                                            [nn.ReLU(), nn.Dropout(p=0.3), nn.Linear(5007, 1188)]
                                         ],
                                         [
                                             [nn.Softmax(dim=1)]
@@ -426,20 +421,26 @@ model_configs = {
         'basemodel':None,
         'geolocation_model_extension':[
                                        [
-                                            [nn.Dropout(p=0.1), nn.Linear(1152, 6000), nn.Dropout(p=0.3), nn.ReLU()] # , nn.Dropout(p=0.1)
+                                            [nn.Dropout(p=0.1), nn.Linear(1152, 9000), nn.ReLU()], # , nn.Dropout(p=0.1)
                                         ],
                                         [
-                                            [nn.Linear(6000, 9000)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)]
+                                            [nn.Dropout(p=0.5), nn.Linear(9000, 10000), nn.Dropout(p=0.5), nn.ReLU()], # , nn.Dropout(p=0.1)
+                                        ],
+                                        [
+                                            [nn.Linear(10000, 10000)],
+                                            [nn.Linear(10000, 1)],
+                                            [nn.Linear(10000, 1)],
+                                            [nn.Linear(10000, 1)],
+                                            [nn.Linear(10000, 1)],
+                                            [nn.Linear(10000, 1)],
+                                            [nn.Linear(10000, 1)],
+                                            [nn.Linear(10000, 1)]
                                         ],
                                         [ 
-                                            [nn.ReLU(), nn.Dropout(p=0.3), nn.Linear(9007, 1188)]
+                                            [nn.ReLU(), nn.Dropout(p=0.15), nn.Linear(10007, 5000)]
+                                        ],
+                                        [ 
+                                            [nn.ReLU(), nn.Dropout(p=0.15), nn.Linear(5000, 1188)]
                                         ],
                                         [
                                             [nn.Softmax(dim=1)]
@@ -451,39 +452,42 @@ model_configs = {
         'optimizer_params':{'lr':0.0001},
         'target_outputs':{
                             0:[False],
-                            1:[False, True, True, True, True, True, True, True],
-                            2:[True],
-                            3:[True]
+                            1:[False],
+                            2:[False, True, True, True, True, True, True, True],
+                            3:[True],
+                            4:[True]
                         },
         'concurrent_reduction':{
-                                0:torch.cat,
-                                1:torch.cat,
-                                2:first,
-                                3:first
+                                0:first,
+                                1:first,
+                                2:torch.cat,
+                                3:first,
+                                4:first,
+                                5:first
                                 },
         'tasks':{
-                                1:[('side_tasks', slice(0, 6))],
-                                2:[('geolocation', slice(0, 1))]
+                                2:[('side_tasks', slice(0, 6))],
+                                4:[('geolocation', slice(0, 1))]
                                 }
         },
         'ID8_full':{
         'basemodel':"ViT-SO400M-14-SigLIP-384",
         'geolocation_model_extension':[
                                        [
-                                            [nn.Dropout(p=0.1), nn.Linear(1152, 6000), nn.Dropout(p=0.3), nn.ReLU()] # , nn.Dropout(p=0.1)
+                                            [nn.Dropout(p=0.1), nn.Linear(1152, 8000), nn.Dropout(p=0.2), nn.ReLU()] # , nn.Dropout(p=0.1)
                                         ],
                                         [
-                                            [nn.Linear(6000, 9000)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)],
-                                            [nn.Linear(6000, 1)]
+                                            [nn.Linear(8000, 10000)],
+                                            [nn.Linear(8000, 1)],
+                                            [nn.Linear(8000, 1)],
+                                            [nn.Linear(8000, 1)],
+                                            [nn.Linear(8000, 1)],
+                                            [nn.Linear(8000, 1)],
+                                            [nn.Linear(8000, 1)],
+                                            [nn.Linear(8000, 1)]
                                         ],
                                         [ 
-                                            [nn.ReLU(), nn.Dropout(p=0.3), nn.Linear(9007, 1188)]
+                                            [nn.ReLU(), nn.Dropout(p=0.2), nn.Linear(10007, 1188)]
                                         ],
                                         [
                                             [nn.Softmax(dim=1)]
@@ -581,17 +585,18 @@ system_configs = {
         'on_embeddings':'ViT-SO400M-14-SigLIP-384',
         'variable_names':{
             0:['geolocation'] # 'solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'
-        }
+        },
+        'batch_size':1024
         },
 
     'SYS5':{
         "auxiliary_loss":{
-                          1:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
-                          2:[nn.CrossEntropyLoss()]
+                          0:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
+                          1:[nn.CrossEntropyLoss()]
                         },
         "loss_multiplier":{
-                          1:[1, 1, 1, 1, 1, 1, 1],
-                          2:[1]
+                          0:[1, 1, 1, 1, 1, 1, 1],
+                          1:[1]
                         },
         "tau":150,
         'COUNTRIES_T':None,
@@ -601,10 +606,10 @@ system_configs = {
         'predefined_region_grid':None,
         'on_embeddings':'ViT-SO400M-14-SigLIP-384',
         'variable_names':{
-            1:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
-            2:['geolocation'] # 'solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'
+            0:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
+            1:['geolocation'] # 'solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'
         },
-        'batch_size':500
+        'batch_size':1024
         },
     'SYS5_full':{
         "auxiliary_loss":{
@@ -718,12 +723,12 @@ system_configs = {
         },
     'SYS8':{
         "auxiliary_loss":{
-                          1:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
-                          2:[nn.CrossEntropyLoss()]
+                          2:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
+                          4:[nn.CrossEntropyLoss()]
                         },
         "loss_multiplier":{
-                          1:[1, 1, 1, 1, 1, 1, 1],
-                          2:[1]
+                          2:[2, 2, 2, 2, 2, 2, 2],
+                          4:[1]
                         },
         "tau":150,
         'COUNTRIES_T':None,
@@ -733,10 +738,10 @@ system_configs = {
         'predefined_region_grid':None,
         'on_embeddings':'ViT-SO400M-14-SigLIP-384',
         'variable_names':{
-            1:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
-            2:['geolocation'] # 'solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'
+            2:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
+            4:['geolocation'] # 'solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'
         },
-        'batch_size':1024
+        'batch_size':512
         },
     'SYS8_full':{
         "auxiliary_loss":{
@@ -744,7 +749,7 @@ system_configs = {
                           2:[nn.CrossEntropyLoss()]
                         },
         "loss_multiplier":{
-                          1:[1, 1, 1, 1, 1, 1, 1],
+                          1:[2, 2, 2, 2, 2, 2, 2],
                           2:[1]
                         },
         "tau":150,

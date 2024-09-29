@@ -128,7 +128,7 @@ def model_loader(model_id):
 
     return ModelBarebone, Optimizer
 
-def system_loader(force_override=False):
+def system_loader(SYSTEM_ID, force_override=False):
 
     if GLOBAL_SYSTEMS_PATH+SYSTEM_ID+'.pkl' in glob.glob(GLOBAL_SYSTEMS_PATH+'*.pkl') and not force_override:
 

@@ -41,22 +41,36 @@ import time
 
 import tqdm
 
-def live_plot(y, time_till_finish, labels, epochs, figsize=(7,5)):
+def live_plot(y, time_till_finish, labels, epochs, train_acc, test_acc, figsize=(7,5)):
 
     loss = {k:np.vstack([d[k] for d in y]) for k in y[0]}
     y = np.concatenate(list(loss.values()), 1)
 
     y = y / y[0, :]
 
+    y2 = np.vstack((train_acc, test_acc)).T
+
     epoch = y.shape[0]
 
     clear_output(wait=True)
-    plt.figure(figsize=figsize)
-    plt.plot(y, label=labels)
-    plt.title(str(epoch)+'/'+str(epochs)+'; '+'Time till finish: '+time_till_finish)
-    plt.grid(True)
-    plt.xlabel('epoch')
-    plt.legend(loc='center left') # the plot evolves to the right
+
+    fig, ax1 = plt.subplots()
+
+    ax2 = ax1.twinx()
+
+    ax1.plot(y, label=labels)
+    ax1.set_title(str(epoch)+'/'+str(epochs)+'; '+'Time till finish: '+time_till_finish)
+    ax1.set_xlabel('epoch')
+    ax1.legend(loc='upper left') # the plot evolves to the right
+    
+    ax2.plot(y2, label=['train_acc', 'val_acc'], marker='o', linestyle='dashed')
+    ax2.legend(loc='lower left')
+
+    ax1.set_ylabel('Loss fraction', color='g')
+    ax2.set_ylabel('Total country level accuracy', color='b')
+
+    ax2.grid()
+
     plt.show();
 
 def plot_loss_update(epoch, epochs, mb, loss):
@@ -254,7 +268,8 @@ class BRAIN:
         variable_names_with_level = sum([[str(k)+'_'+y for y in self.y_variable_names[k]] for k in self.y_variable_names], [])
 
         start_full_training = time.time()
-
+        test_acc, train_acc = [], []
+        test_acc_, train_acc_ = 0, 0
         for epoch in tqdm.tqdm(range(epochs)):  # loop over the dataset multiple times
             
             running_loss = 0.0
@@ -268,7 +283,6 @@ class BRAIN:
 
                 real_y = self.real_output_extract(data[1])
 
-                #with torch.autocast(device_type='cuda'):
                 network_output_y = self.NN(inputs)
                 granular_loss = self.loss_calculator(network_output_y, real_y)
 
@@ -289,12 +303,12 @@ class BRAIN:
             time_still_seconds = (epochs-1-epoch)*sec_per_epoch
             time_still = str(datetime.timedelta(seconds=time_still_seconds)).split('.')[0]
 
-            #if epoch % 10 == 0:
-            #    test_acc, train_acc = self.accuracy_calc()
+            if epoch % 10 == 0:
+                test_acc_, train_acc_ = self.accuracy_calc()
+            test_acc.append(test_acc_)
+            train_acc.append(train_acc_)
 
-            #    print(epoch, train_acc, test_acc)
-
-            live_plot(self.train_loss_granular, time_still, variable_names_with_level, epochs)
+            live_plot(self.train_loss_granular, time_still, variable_names_with_level, epochs, train_acc, test_acc)
     
     def generate_test_main(self, on='test'):
 
@@ -307,45 +321,53 @@ class BRAIN:
         elif on=='train':
             loader = self.train_dataloader
 
-        for i, data in enumerate(loader, 0):
-            inputs = data[0].to(self.device)
-            true_labels_name= data[1][4]
+        self.NN.eval()
+        with torch.no_grad():
+            for i, data in enumerate(loader, 0):
+                inputs = data[0].to(self.device)
+                true_labels_name= data[1][4]
 
-            network_output_y = self.NN(inputs)
-            model_labels_bin = torch.argmax(network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0], 1).cpu()
-            model_labels_name = self.shp.iloc[self.selected_indexes.cpu()].iloc[model_labels_bin].index.values
-            
-            real_y = self.real_output_extract(data[1])
-            # other tasks
-            for auxiliary_level in network_output_y:
+                network_output_y = self.NN(inputs)
+                model_labels_bin = torch.argmax(network_output_y[self.tasks_location['geolocation'][0]][self.tasks_location['geolocation'][1]][0], 1).cpu()
+                model_labels_name = self.shp.iloc[self.selected_indexes.cpu()].iloc[model_labels_bin].index.values
+                
+                real_y = self.real_output_extract(data[1])
+                # other tasks
+                for auxiliary_level in network_output_y:
 
-                if auxiliary_level not in self.criterions:
-                    continue
-
-                for i, _ in enumerate(self.criterions[auxiliary_level]):
-
-                    if self.y_variable_names[auxiliary_level][i] == 'geolocation':
+                    if auxiliary_level not in self.criterions:
                         continue
 
-                    self.total_sidetasks.append((data[1][0], torch.Tensor([auxiliary_level]*data[1][0].size(0)), torch.Tensor([i]*data[1][0].size(0)), network_output_y[auxiliary_level][i][:, 0], real_y[auxiliary_level][i][:, 0]))
+                    for i, _ in enumerate(self.criterions[auxiliary_level]):
 
-            self.total_occurences += list(zip(true_labels_name, model_labels_name))
+                        if self.y_variable_names[auxiliary_level][i] == 'geolocation':
+                            continue
 
-            cords = list(zip(data[1][2].tolist(), data[1][3].tolist()))
-            self.cords_list += cords
+                        self.total_sidetasks.append((data[1][0], torch.Tensor([auxiliary_level]*data[1][0].size(0)), torch.Tensor([i]*data[1][0].size(0)), network_output_y[auxiliary_level][i][:, 0], real_y[auxiliary_level][i][:, 0]))
+
+                self.total_occurences += list(zip(true_labels_name, model_labels_name))
+
+                cords = list(zip(data[1][2].tolist(), data[1][3].tolist()))
+                self.cords_list += cords
+            
+        self.NN.train()
         
-        x1 = np.concatenate([np.vstack([y.detach().cpu().numpy() for y in x]) for x in self.total_sidetasks], 1)
-        x2 = pd.DataFrame(x1.T, columns=['id', 'aux_lvl', 'lvl', 'pred', 'real'])
-        x2['lvl'] = x2['lvl'].apply(lambda x: self.y_variable_names[1][int(x)])
-        x2 = x2.drop(columns='aux_lvl').set_index(['id', 'lvl']).unstack(-1)
-        x2.columns = x2.columns.swaplevel(0, 1)
-        self.side_task_summary = x2.sort_index(axis=1)
+        if 'side_tasks' in self.tasks_location:
+            x1 = np.concatenate([np.vstack([y.detach().cpu().numpy() for y in x]) for x in self.total_sidetasks], 1)
+            x2 = pd.DataFrame(x1.T, columns=['id', 'aux_lvl', 'lvl', 'pred', 'real'])
+            x2['lvl'] = x2['lvl'].apply(lambda x: self.y_variable_names[self.tasks_location['side_tasks'][0]][int(x)])
+            x2 = x2.drop(columns='aux_lvl').set_index(['id', 'lvl']).unstack(-1)
+            x2.columns = x2.columns.swaplevel(0, 1)
+            self.side_task_summary = x2.sort_index(axis=1)
 
-        geolocation_task = pd.DataFrame(self.total_occurences, 
-                                        columns=pd.MultiIndex.from_tuples([('geolocation', 'real'), ('geolocation', 'pred')]), 
-                                        index=self.side_task_summary.index)
-        
-        self.task_summary = self.side_task_summary.join(geolocation_task).sort_index(axis=1)
+            geolocation_task = pd.DataFrame(self.total_occurences, 
+                                            columns=pd.MultiIndex.from_tuples([('geolocation', 'real'), ('geolocation', 'pred')]), 
+                                            index=self.side_task_summary.index)
+            
+            self.task_summary = self.side_task_summary.join(geolocation_task).sort_index(axis=1)
+        else:
+            self.task_summary = pd.DataFrame(self.total_occurences, 
+                                            columns=pd.MultiIndex.from_tuples([('geolocation', 'real'), ('geolocation', 'pred')]))
 
     def extract_photo(self, idx):
 
@@ -413,7 +435,10 @@ class BRAIN:
 
         inputs = data[0].to(self.device)[None, ...]
 
-        network_output_y = self.NN(inputs)
+        self.NN.eval()
+        with torch.no_grad():
+            network_output_y = self.NN(inputs)
+        self.NN.train()
 
         Hav_gi_xn = self.full_precompute[data[1][0], :][self.selected_indexes.long()]
         Hav_gn_xn = data[1][1]
