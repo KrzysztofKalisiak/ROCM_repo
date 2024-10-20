@@ -168,7 +168,7 @@ def system_loader(SYSTEM_ID, force_override=False):
 
     return BR
 
-def save_system(BR):
+def save_system(BR, SYSTEM_ID):
 
     torch.save({
             'model_state_dict': BR.NN.state_dict(),
