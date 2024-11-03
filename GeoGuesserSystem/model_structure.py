@@ -27,7 +27,6 @@ class GeoBrainNetwork(nn.Module):
                  barebone_model=EmptyModel(),
                  barebone_unfreeze_config=slice(0,0),
                  model_elements=[],
-                 preprocess_func=lambda x: x,
                  target_outputs = {},
                  reductions = {},
                  tasks = {}):
@@ -37,8 +36,6 @@ class GeoBrainNetwork(nn.Module):
         self.barebone_unfreeze_config = barebone_unfreeze_config
 
         self.mods = nn.ModuleList([nn.ModuleList([nn.ModuleList(y) for y in x]) for x in model_elements])
-
-        self.preprocess_func = preprocess_func
 
         self.target_outputs = target_outputs
 
@@ -60,13 +57,12 @@ class GeoBrainNetwork(nn.Module):
         
             if x.dim() == 5: # panorama
 
-                x_ = torch.stack([self.barebone_model(self.preprocess_func(x[:, :, :, :, ij])) for ij in range(x.shape[4])], dim=2)
+                x_ = torch.stack([self.barebone_model(x[:, :, :, :, ij]) for ij in range(x.shape[4])], dim=2)
                 x = torch.mean(x_, dim=2)
 
             else: # no panorama
                 
-                x = self.preprocess_func(x)
-                x = self.barebone_model(x)
+                x = self.barebone_model(x[None, :, :, :])
         else: # on embedding
 
             if x.dim() == 3: # panorama
@@ -101,15 +97,15 @@ def model_loader(model_id):
 
     
     if model_conf['basemodel'] is not None:
-        baseline_model, _, _ = open_clip.create_model_and_transforms(model_conf['basemodel'], device=DEVICE)
+        baseline_model, preprocess = open_clip.create_model_from_pretrained('hf-hub:timm/ViT-SO400M-14-SigLIP-384', device=DEVICE)
         baseline_model = baseline_model.visual
     else:
         baseline_model=None
+        preprocess=None
 
     ModelBarebone = GeoBrainNetwork(baseline_model, 
                                     model_conf['unfreeze_basemodel_params_conf'],
                                     model_conf['geolocation_model_extension'],
-                                    model_conf['preprocess'],
                                     model_conf['target_outputs'],
                                     model_conf['concurrent_reduction'],
                                     model_conf['tasks']
@@ -126,7 +122,7 @@ def model_loader(model_id):
         ModelBarebone.load_state_dict(checkpoint['model_state_dict'])
         Optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-    return ModelBarebone, Optimizer
+    return ModelBarebone, Optimizer, preprocess
 
 def system_loader(SYSTEM_ID, force_override=False):
 
@@ -143,10 +139,9 @@ def system_loader(SYSTEM_ID, force_override=False):
     else:
         premerged_shapes = None
 
+    model, optimizer, preprocess = model_loader(system_configs[SYSTEM_ID]['model_ID'])
+    train_dataset, test_dataset, pct_n, shp_n, pct, shp, countries = process_data(premerged_shapes, system_conf['on_embeddings'], preprocess)
 
-    train_dataset, test_dataset, pct_n, shp_n, pct, shp, countries = process_data(premerged_shapes, system_conf['on_embeddings'])
-
-    model, optimizer = model_loader(system_configs[SYSTEM_ID]['model_ID'])
 
     BR = BRAIN()
     BR.NN = model.to(DEVICE)

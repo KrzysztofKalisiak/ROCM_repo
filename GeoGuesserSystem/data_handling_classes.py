@@ -148,7 +148,7 @@ class DataFeederOperator:
 
 convert_tensor = v2.ToTensor()
 class GeoBrainDataset(Dataset):
-    def __init__(self, img_dir, target_transform=None, transform=None, load_embeddings=False):
+    def __init__(self, img_dir, target_transform=None, transform=None, load_embeddings=False, preprocess=lambda x: x):
         self.img_dir = img_dir
         self.transform = transform
         self.target_transform = target_transform
@@ -163,6 +163,8 @@ class GeoBrainDataset(Dataset):
         self.GDP_data = (self.GDP_data-self.GDP_normalization_params.loc['mean'])/self.GDP_normalization_params.loc['std']
 
         self.load_embeddings = load_embeddings
+
+        self.preprocess = preprocess
 
         if self.load_embeddings:
             self.target_dir = 'embeddings/%s' % self.load_embeddings
@@ -188,6 +190,7 @@ class GeoBrainDataset(Dataset):
 
             if self.load_embeddings:
                 paths = ['/'.join(x.rsplit('/', 2)[1:]).replace('jpg', 'pt') for x in paths]
+                #print(paths)
                 images = [self.all_embeddings[path][0, :] for path in paths if path in self.all_embeddings]
 
                 if len(images) > 1:
@@ -202,7 +205,7 @@ class GeoBrainDataset(Dataset):
                         images = torch.cat((images,images[:, [0]]), dim=1)
             
             else:
-                images = [convert_tensor(Image.open(path)) for path in paths if path in self.all_paths]
+                images = [self.preprocess(Image.open(path)) for path in paths if path in self.all_paths]
                 if self.transform is not None:
                     images = [self.transform(image) for image in images]
 
