@@ -6,12 +6,10 @@ from PIL import Image
 
 from shapely.geometry import Point
 
-from sklearn.cluster import OPTICS, KMeans
-
 from shapely.ops import unary_union
 
 import torchvision.transforms as v2
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
 
 from PIL import Image

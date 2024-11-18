@@ -2,13 +2,10 @@ import numba as nb
 import numpy as np
 import torch
 import torch.nn as nn
-
-import urllib.request
 import numpy as np
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-import clip
 from PIL import Image
 from scipy.ndimage import filters
 from torch import nn

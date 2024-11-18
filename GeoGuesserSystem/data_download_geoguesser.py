@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import glob
 import os
-from PIL import Image
 import matplotlib.pyplot as plt
 
 from shapely.geometry import Polygon, Point, MultiPolygon, MultiPoint

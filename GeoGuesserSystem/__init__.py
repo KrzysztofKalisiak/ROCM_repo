@@ -8,7 +8,7 @@ GLOBAL_SYSTEMS_PATH = '/home/krzysztof-kalisiak/Desktop/ROCM_repo/_SYSTEMS_/'
 
 DEVICE = 'cuda'
 
-SYSTEM_ID = 'SYS1'
+#SYSTEM_ID = 'SYS1'
 
 
 from .config import *
@@ -25,8 +25,6 @@ from .model_structure import *
 
 from .utils import *
 
-from .cam import *
+#from .cam import *
 
-from .visualize import *
-
-from .imagenet_labels import *
+#from .visualize import *

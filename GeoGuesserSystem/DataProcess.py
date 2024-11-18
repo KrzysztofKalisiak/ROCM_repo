@@ -2,11 +2,9 @@ from .data_handling_classes import *
 from .config import *
 from .model_configurations import *
 
-from shapely import Polygon
+def process_data(shp, system, on_embedding=False, preprocess_=None):
 
-def process_data(shp, on_embedding=False, preprocess_=None):
-
-    countries_t = system_configs[SYSTEM_ID]['COUNTRIES_T']
+    countries_t = system_configs[system]['COUNTRIES_T']
 
     countries_all = set([x.split(GLOBAL_DATA_PATH.rsplit('/', 1)[1]+'/')[1].split('/')[0] for x in glob.glob(GLOBAL_DATA_PATH+'/*/*.jpg')])
     if countries_t is None:

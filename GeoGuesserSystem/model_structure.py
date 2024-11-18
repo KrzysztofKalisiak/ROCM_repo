@@ -62,7 +62,7 @@ class GeoBrainNetwork(nn.Module):
 
             else: # no panorama
                 
-                x = self.barebone_model(x[None, :, :, :])
+                x = self.barebone_model(x)
         else: # on embedding
 
             if x.dim() == 3: # panorama
@@ -140,7 +140,7 @@ def system_loader(SYSTEM_ID, force_override=False):
         premerged_shapes = None
 
     model, optimizer, preprocess = model_loader(system_configs[SYSTEM_ID]['model_ID'])
-    train_dataset, test_dataset, pct_n, shp_n, pct, shp, countries = process_data(premerged_shapes, system_conf['on_embeddings'], preprocess)
+    train_dataset, test_dataset, pct_n, shp_n, pct, shp, countries = process_data(premerged_shapes, SYSTEM_ID, system_conf['on_embeddings'], preprocess)
 
 
     BR = BRAIN()

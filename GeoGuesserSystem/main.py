@@ -8,34 +8,25 @@ from shapely.geometry import Point
 
 from shapely.ops import unary_union
 
-import torch.optim as optim
-
 import torch.nn as nn
 import torch
 
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
 from shapely.plotting import plot_polygon
 
-from pytorch_grad_cam import GradCAM
-from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-from pytorch_grad_cam.utils.image import show_cam_on_image,preprocess_image
-from torchvision.models.feature_extraction import get_graph_node_names
-from PIL import Image
 import cv2
 
 import warnings
 warnings.filterwarnings("ignore")
 
 from .utils import *
-from .cam import CAM, GradCAM, GradCAMpp, SmoothGradCAMpp, ScoreCAM
-from .visualize import visualize, reverse_normalize
-from .imagenet_labels import label2idx, idx2label
+from .cam import ScoreCAM
+from .visualize import visualize
 
 from IPython.display import clear_output
 from matplotlib import pyplot as plt
 import numpy as np
-import collections
 import datetime
 import time
 
@@ -190,6 +181,7 @@ class BRAIN:
         self.train_dataloader = DataLoader(self.train_dataset, batch_size=self.batch_size, 
                                            num_workers=4, persistent_workers=True, 
                                            multiprocessing_context='spawn', shuffle=True) 
+        
         # num_workers=4, persistent_workers=True, multiprocessing_context='spawn', shuffle=True
         self.test_dataloader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True)
     
@@ -390,7 +382,12 @@ class BRAIN:
         if dataset[id][0].dim()==4:
             res = []
             for j in range(3):
-                res.append(dataset[id][0][:, :, :, j].cpu().numpy().transpose(1, 2, 0))
+
+                A = dataset[id][0][:, :, :, j].cpu().numpy().transpose(1, 2, 0)
+                A -= A.min()
+                A /= A.max()
+                res.append(A)
+
             res = np.hstack(res)
             fig = plt.figure(figsize = (10,10))
             plt.imshow(res, interpolation='nearest')
@@ -467,7 +464,7 @@ class BRAIN:
         
         return fig
 
-    def gradient_track(self, data, auxiliary_lvl=1, lvl=3):
+    def gradient_track(self, data, auxiliary_lvl=1, lvl=0):
 
         class CNet(nn.Module):
             def __init__(self, NN):
@@ -478,23 +475,36 @@ class BRAIN:
             def forward(self, x):
 
                 return self.NN(x)[auxiliary_lvl][lvl]
-            
-        NNC = CNet(self.NN).to('cuda')
 
-        res = []
-
+        NNC = CNet(self.NN)
         target_layer = NNC.NN.barebone_model.trunk.patch_embed.proj
         wrapped_model = ScoreCAM(NNC, target_layer)
 
+        res = []
         for i in tqdm.tqdm(range(3)):
+
             cam, idx = wrapped_model(data[0][None, :, :, :, i])
 
-            heatmap = visualize(data[0][None, :, :, :, i], cam)
+            _, _, H, W = data[0][None, :, :, :, i].shape
+
+            cam = F.interpolate(cam, size=(H, W), mode='bilinear', align_corners=False)
+            cam = cam.squeeze()
+            heatmap = cv2.applyColorMap(np.uint8(cam), cv2.COLORMAP_JET)
+            heatmap = torch.from_numpy(heatmap.transpose(2, 0, 1))
+            heatmap = heatmap.float() / 255
+            b, g, r = heatmap.split(1)
+            heatmap = torch.cat([r, g, b])
+
+            A = data[0][None, :, :, :, i]
+            A -= A.min()
+            A /= A.max()
+
+            result = heatmap + A.cpu()
+            result = result.div(result.max())
+            heatmap = visualize(A, cam[None, None, :, :])
+
             hm = (heatmap.squeeze().numpy().transpose(1, 2, 0))
 
             res.append(hm)
-
-        plt.figure(figsize = (20,20))
-        plt.imshow(np.hstack(res), interpolation='nearest')
-
-        return np.hstack(res)
+        res = np.hstack(res)
+        return res
