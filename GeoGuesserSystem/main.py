@@ -181,11 +181,13 @@ class BRAIN:
 
     def prepare_dataloaders(self):
 
-        self.train_dataloader = DataLoader(self.train_dataset, batch_size=self.batch_size, 
-                                           num_workers=4, persistent_workers=True, 
-                                           multiprocessing_context='spawn', shuffle=True) 
+        if self.NN.barebone_model is None:
+            self.train_dataloader = DataLoader(self.train_dataset, batch_size=self.batch_size, 
+                                            num_workers=4, persistent_workers=True, 
+                                            multiprocessing_context='spawn', shuffle=True) 
+        else:
+            self.train_dataloader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True) 
         
-        # num_workers=4, persistent_workers=True, multiprocessing_context='spawn', shuffle=True
         self.test_dataloader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True)
     
     def real_output_extract(self, data):

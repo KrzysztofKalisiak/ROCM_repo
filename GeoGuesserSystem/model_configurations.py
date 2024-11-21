@@ -144,6 +144,7 @@ system_configs = {
         },
         'batch_size':1024
         },
+
     'SYS_ID_grid0_full':{
         "auxiliary_loss":{
                         0:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
@@ -157,14 +158,14 @@ system_configs = {
         'COUNTRIES_T':None,
         'blur_system':None,
         'save_system':True,
-        'model_ID':'ID_grid0',
+        'model_ID':'ID_grid0_full',
         'predefined_region_grid':None,
-        'on_embeddings':'ViT-SO400M-14-SigLIP-384',
+        'on_embeddings':None,
         'variable_names':{
             0:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
             2:['geolocation']
         },
-        'batch_size':1024
+        'batch_size':24
         }
 }
 
