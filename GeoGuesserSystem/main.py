@@ -32,7 +32,7 @@ import time
 
 import tqdm
 
-def live_plot(y, time_till_finish, labels, epochs, train_acc, test_acc, figsize=(7,5)):
+def live_plot(y, time_till_finish, labels, epochs, train_acc, test_acc, figsize=(7,5), save=False):
 
     loss = {k:np.vstack([d[k] for d in y]) for k in y[0]}
     y = np.concatenate(list(loss.values()), 1)
@@ -61,6 +61,9 @@ def live_plot(y, time_till_finish, labels, epochs, train_acc, test_acc, figsize=
     ax2.set_ylabel('Total country level accuracy', color='b')
 
     ax2.grid()
+
+    if save:
+        plt.savefig(save+'.png')
 
     plt.show();
 
@@ -238,21 +241,21 @@ class BRAIN:
 
         self.generate_test_main(on='test')
         tt = self.task_summary['geolocation'].copy()
-        tt = tt.applymap(lambda x: x[:2])
+        tt = tt.applymap(lambda x: x[:12])
         tt = tt.groupby('real')['pred'].value_counts().unstack(-1)
         tt = tt.reindex(tt.index, axis=1).fillna(0)
         test_acc = np.diag(tt).sum()/np.sum(tt.values, axis=None)
 
         self.generate_test_main(on='train')
         tt = self.task_summary['geolocation'].copy()
-        tt = tt.applymap(lambda x: x[:2])
+        tt = tt.applymap(lambda x: x[:12])
         tt = tt.groupby('real')['pred'].value_counts().unstack(-1)
         tt = tt.reindex(tt.index, axis=1).fillna(0)
         train_acc = np.diag(tt).sum()/np.sum(tt.values, axis=None)
 
         return test_acc, train_acc
 
-    def train(self, epochs=1):
+    def train(self, epochs=1, name='Unknown'):
 
         if self.train_dataloader is None:
             self.prepare_dataloaders()
@@ -304,6 +307,8 @@ class BRAIN:
             train_acc.append(train_acc_)
 
             live_plot(self.train_loss_granular, time_still, variable_names_with_level, epochs, train_acc, test_acc)
+
+        live_plot(self.train_loss_granular, time_still, variable_names_with_level, epochs, train_acc, test_acc, save=name)
     
     def generate_test_main(self, on='test'):
 

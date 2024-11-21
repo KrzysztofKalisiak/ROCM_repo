@@ -7,26 +7,267 @@ import torch.optim as optim
 def first(l, _):
     return l[0]
 
+model_configs = {
+    'ID_grid0':{
+        'basemodel':None,
+        'geolocation_model_extension':[
+            [
+                [nn.Dropout(p=0.1), nn.Linear(1152, 2000)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)]
+            ],
+            [ 
+                [nn.ReLU(), nn.Dropout(p=0.1), nn.Linear(2000+7, 10000)]
+            ],
+            [ 
+                [nn.ReLU(), nn.Dropout(p=0.1), nn.Linear(10000, 1188)]
+            ],
+            [
+                [nn.Softmax(dim=1)]
+            ]
+        ],
+    'unfreeze_basemodel_params_conf':slice(0, 0),
+    'preprocess':None,
+    'optimizer':optim.AdamW,
+    'optimizer_params':{'lr':0.0001},
+    'target_outputs':{
+                        0:[False, True, True, True, True, True, True, True],
+                        1:[False],
+                        2:[True],
+                        3:[True]
+                    },
+    'concurrent_reduction':{
+                            0:torch.cat,
+                            1:first,
+                            2:first,
+                            3:first
+                            },
+    'tasks':{
+                            0:[('side_tasks', slice(0, 6))],
+                            2:[('geolocation', slice(0, 1))]
+                            }
+    },
+    'ID_grid0_full':{
+        'basemodel':"ViT-SO400M-14-SigLIP-384",
+        'geolocation_model_extension':[
+            [
+                [nn.Dropout(p=0.1), nn.Linear(1152, 2000)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)],
+                [nn.Dropout(p=0.1), nn.Linear(1152, 1)]
+            ],
+            [ 
+                [nn.ReLU(), nn.Dropout(p=0.1), nn.Linear(2000+7, 10000)]
+            ],
+            [ 
+                [nn.ReLU(), nn.Dropout(p=0.1), nn.Linear(10000, 1188)]
+            ],
+            [
+                [nn.Softmax(dim=1)]
+            ]
+        ],
+    'unfreeze_basemodel_params_conf':slice(0, 0),
+    'preprocess':None,
+    'optimizer':optim.AdamW,
+    'optimizer_params':{'lr':0.0001},
+    'target_outputs':{
+                        0:[False, True, True, True, True, True, True, True],
+                        1:[False],
+                        2:[True],
+                        3:[True]
+                    },
+    'concurrent_reduction':{
+                            0:torch.cat,
+                            1:first,
+                            2:first,
+                            3:first
+                            },
+    'tasks':{
+                            0:[('side_tasks', slice(0, 6))],
+                            2:[('geolocation', slice(0, 1))]
+                            }
+    }
+    }
 
+system_configs = {
+
+    'SYS_ID_grid0':{
+        "auxiliary_loss":{
+                        0:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
+                        2:[nn.CrossEntropyLoss()]
+                        },
+        "loss_multiplier":{
+                        0:[10, 10, 10, 10, 10, 10, 10],
+                        2:[1]
+                        },
+        "tau":200,
+        'COUNTRIES_T':None,
+        'blur_system':None,
+        'save_system':True,
+        'model_ID':'ID_grid0',
+        'predefined_region_grid':None,
+        'on_embeddings':'ViT-SO400M-14-SigLIP-384_mix',
+        'variable_names':{
+            0:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
+            2:['geolocation']
+        },
+        'batch_size':1024
+    },
+    'SYS_ID_grid0_clean':{
+        "auxiliary_loss":{
+                        0:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
+                        2:[nn.CrossEntropyLoss()]
+                        },
+        "loss_multiplier":{
+                        0:[10, 10, 10, 10, 10, 10, 10],
+                        2:[1]
+                        },
+        "tau":200,
+        'COUNTRIES_T':None,
+        'blur_system':None,
+        'save_system':True,
+        'model_ID':'ID_grid0',
+        'predefined_region_grid':None,
+        'on_embeddings':'ViT-SO400M-14-SigLIP-384',
+        'variable_names':{
+            0:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
+            2:['geolocation']
+        },
+        'batch_size':1024
+        },
+    'SYS_ID_grid0_full':{
+        "auxiliary_loss":{
+                        0:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
+                        2:[nn.CrossEntropyLoss()]
+                        },
+        "loss_multiplier":{
+                        0:[10, 10, 10, 10, 10, 10, 10],
+                        2:[1]
+                        },
+        "tau":200,
+        'COUNTRIES_T':None,
+        'blur_system':None,
+        'save_system':True,
+        'model_ID':'ID_grid0',
+        'predefined_region_grid':None,
+        'on_embeddings':'ViT-SO400M-14-SigLIP-384',
+        'variable_names':{
+            0:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
+            2:['geolocation']
+        },
+        'batch_size':1024
+        }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''
 def scenario_generator():
 
     confs = {}
     systems = {}
 
-    i = 0
+    i = -1
 
-    for dr in [0.2, 0.4, 0.5]:
+    for dr in [0.1]:
 
-        for neurons3 in [2000, 4000, 10000]:
+        for neurons3 in [2000]:
 
-            for neurons4 in [2000, 4000, 10000]:
+            for neurons4 in [10000]:
 
-                for aux_weight in [2]:
+                for aux_weight in [10]:
                     
                     i += 1
                     id = 'ID_grid%i' % i
-                    if i < 20:
-                        continue
 
                     conf = {
                             'basemodel':None,
@@ -103,7 +344,104 @@ def scenario_generator():
     return systems, confs
 
 
-system_configs, model_configs = scenario_generator()
+#system_configs, model_configs = scenario_generator()
+'''
+'''
+def scenario_generator():
+
+    confs = {}
+    systems = {}
+
+    i = 0
+
+    for dr in [0.2, 0.4, 0.5]:
+
+        for neurons3 in [2000, 4000, 10000]:
+
+            for neurons4 in [2000, 4000, 10000]:
+
+                for aux_weight in [2]:
+                    
+                    i += 1
+                    id = 'ID_grid%i' % i
+                    if i < 30:
+                        continue
+
+                    conf = {
+                            'basemodel':None,
+                            'geolocation_model_extension':[
+                                [
+                                    [nn.Dropout(p=dr), nn.Linear(1152, neurons3)],
+                                    [nn.Dropout(p=dr), nn.Linear(1152, 1)],
+                                    [nn.Dropout(p=dr), nn.Linear(1152, 1)],
+                                    [nn.Dropout(p=dr), nn.Linear(1152, 1)],
+                                    [nn.Dropout(p=dr), nn.Linear(1152, 1)],
+                                    [nn.Dropout(p=dr), nn.Linear(1152, 1)],
+                                    [nn.Dropout(p=dr), nn.Linear(1152, 1)],
+                                    [nn.Dropout(p=dr), nn.Linear(1152, 1)]
+                                ],
+                                [ 
+                                    [nn.ReLU(), nn.Dropout(p=dr), nn.Linear(neurons3+7, neurons4)]
+                                ],
+                                [ 
+                                    [nn.ReLU(), nn.Dropout(p=dr), nn.Linear(neurons4, 1188)]
+                                ],
+                                [
+                                    [nn.Softmax(dim=1)]
+                                ]
+                            ],
+                        'unfreeze_basemodel_params_conf':slice(0, 0),
+                        'preprocess':None,
+                        'optimizer':optim.AdamW,
+                        'optimizer_params':{'lr':0.0001},
+                        'target_outputs':{
+                                            0:[False, True, True, True, True, True, True, True],
+                                            1:[False],
+                                            2:[True],
+                                            3:[True]
+                                        },
+                        'concurrent_reduction':{
+                                                0:torch.cat,
+                                                1:first,
+                                                2:first,
+                                                3:first
+                                                },
+                        'tasks':{
+                                                0:[('side_tasks', slice(0, 6))],
+                                                2:[('geolocation', slice(0, 1))]
+                                                }
+                        }
+
+                    confs[id] = conf
+
+                    system_i = {
+                        "auxiliary_loss":{
+                                        0:[nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss(), nn.MSELoss()], 
+                                        2:[nn.CrossEntropyLoss()]
+                                        },
+                        "loss_multiplier":{
+                                        0:[aux_weight, aux_weight, aux_weight, aux_weight, aux_weight, aux_weight, aux_weight],
+                                        2:[1]
+                                        },
+                        "tau":200,
+                        'COUNTRIES_T':None,
+                        'blur_system':None,
+                        'save_system':True,
+                        'model_ID':id,
+                        'predefined_region_grid':None,
+                        'on_embeddings':'ViT-SO400M-14-SigLIP-384_mix',
+                        'variable_names':{
+                            0:['solar radiation','min_temp','max_temp','precipitation','wind_speed','water vapour pressure', 'GDP'],
+                            2:['geolocation']
+                        },
+                        'batch_size':1024
+                        }
+                    
+                    systems['SYS_'+id] = system_i
+
+    return systems, confs
+'''
+
 '''
 baseline_model, preprocess = open_clip.create_model_from_pretrained('hf-hub:timm/ViT-SO400M-14-SigLIP-384', device='cuda')
 baseline_model = baseline_model.visual
