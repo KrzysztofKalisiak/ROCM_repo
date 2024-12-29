@@ -1,6 +1,6 @@
 ---
-title: "Untitled"
-format: html
+title: "Master Thesis Krzysztof Kalisiak"
+format: pdf
 ---
 
 # Chapter 1
@@ -40,3 +40,5 @@ One early approach, proposed by Hays and Efros (2008), used landmark recognition
 
 *Google St, launched in 2007, has provided a rich source of geospatial imagery that has since been widely studied for geolocation purposes. One notable approach is the use of image-to-map matching algorithms, where streetview images are compared to a geographic database to estimate location. Keller et al. (2013) proposed a method for matching panoramic streetview images to 3D maps to determine location with high precision, showcasing how geospatial data and image data can be integrated effectively . More recent developments deep learning techniques to automate the process of visual feature extraction and matching, further improving the accuracy and scalability of these systems .
 
+```{python}
+print('dupa')
