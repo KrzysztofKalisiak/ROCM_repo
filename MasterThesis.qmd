@@ -1,3 +1,8 @@
+---
+title: "Untitled"
+format: html
+---
+
 # Chapter 1
 
 ## Introduction - chat
@@ -12,14 +17,26 @@ The research will delve into the integration of computer vision techniques, mach
 
 In summary, this thesis presents an investigation into the use of streetview images for geolocation, focusing on how visual data can supplement traditional geolocation methods and provide a new dimension of accuracy and efficiency. The work is intended to inspire future research and applications that harness the power of imagery and geospatial data to enhance location-based services and technologies.
 
-## Motivation
+## 1.1 Motivation
 
 the motivation for this thesis is rooted in the desire to explore how streetview images can be harnessed as a viable and powerful tool for geolocation. This research is driven by the goal of developing a deeper understanding of how visual information can complement traditional geolocation systems, and to provide innovative solutions to longstanding challenges in positioning technologies.
 
-## Objectives
+## 1.2 Objectives
 
 The objective of this thesis will be to propose a solution to a geolocation problem leveraging state-of-the art methods and explore further development possibilities. Additionally all resulting materials are gonna be easily availible for further use.
 
-## Structure of the thesis
+## 1.3 Structure of the thesis
 
-### Chapter 2
+# Chapter 2
+
+## State of the art
+
+Even though the main problem of this work still hasn’t been resolved, there are some
+attempts at trying to solve it. In this chapter we will go over relevant work on the geolocation.
+
+## 2.1 Literature review
+
+One early approach, proposed by Hays and Efros (2008), used landmark recognition in images to estimate the location of a camera. They developed a method to associate specific visual features with geographic locations, which was further improved by incorporating image matching techniques that use keypoints in images to find similarities across large datasets . FollowZhou et al. (2010) demonstrated how the spatial arrangement of visual features in images could be used for accurate geolocation, even when faced with challenging urban environments .
+
+*Google St, launched in 2007, has provided a rich source of geospatial imagery that has since been widely studied for geolocation purposes. One notable approach is the use of image-to-map matching algorithms, where streetview images are compared to a geographic database to estimate location. Keller et al. (2013) proposed a method for matching panoramic streetview images to 3D maps to determine location with high precision, showcasing how geospatial data and image data can be integrated effectively . More recent developments deep learning techniques to automate the process of visual feature extraction and matching, further improving the accuracy and scalability of these systems .
+
