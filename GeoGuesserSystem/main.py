@@ -32,6 +32,19 @@ import time
 
 import tqdm
 
+from torchvision.transforms.functional import to_pil_image
+import torchvision.transforms as v2
+import gc
+
+from pytorch_grad_cam import GradCAM, ScoreCAM, \
+    GradCAMPlusPlus, \
+    AblationCAM, \
+    XGradCAM, \
+    EigenCAM, \
+    EigenGradCAM, \
+    LayerCAM, \
+    FullGrad
+
 def live_plot(y, time_till_finish, labels, epochs, train_acc, test_acc, figsize=(7,5), save=False):
 
     loss = {k:np.vstack([d[k] for d in y]) for k in y[0]}
@@ -471,47 +484,72 @@ class BRAIN:
         
         return fig
 
-    def gradient_track(self, data, auxiliary_lvl=1, lvl=0):
+    def gradient_track(self, data, auxiliary_lvl=3, lvl=0, cam_type='ScoreCam'):
 
         class CNet(nn.Module):
             def __init__(self, NN):
                 super().__init__()
-
                 self.NN = NN
-
             def forward(self, x):
-
                 return self.NN(x)[auxiliary_lvl][lvl]
+        im = CNet(self.NN)
+        im.eval()
 
-        NNC = CNet(self.NN)
-        target_layer = NNC.NN.barebone_model.trunk.patch_embed.proj
-        wrapped_model = ScoreCAM(NNC, target_layer)
+        for name, param in im.named_parameters():
+            param.requires_grad = True
 
-        res = []
-        for i in tqdm.tqdm(range(3)):
+        self.prepare_dataloaders()
 
-            cam, idx = wrapped_model(data[0][None, :, :, :, i])
+        #data = BR.test_dataloader.dataset[2355]
+        original_photo_path = self.test_dataloader.dataset.img_dir.loc[data[1][0]]['path']
+        t = v2.ToTensor()
 
-            _, _, H, W = data[0][None, :, :, :, i].shape
+        torch.cuda.empty_cache()
+        gc.collect()
 
-            cam = F.interpolate(cam, size=(H, W), mode='bilinear', align_corners=False)
-            cam = cam.squeeze()
-            heatmap = cv2.applyColorMap(np.uint8(cam), cv2.COLORMAP_JET)
-            heatmap = torch.from_numpy(heatmap.transpose(2, 0, 1))
-            heatmap = heatmap.float() / 255
-            b, g, r = heatmap.split(1)
-            heatmap = torch.cat([r, g, b])
+        def reshape_transform(tensor, height=27, width=27):
+            result = tensor.reshape(tensor.size(0),
+                height, width, tensor.size(2))
+            # Bring the channels to the first dimension,
+            # like in CNNs.
+            result = result.transpose(2, 3).transpose(1, 2)
+            return result
 
-            A = data[0][None, :, :, :, i]
-            A -= A.min()
-            A /= A.max()
+        target_layers = [im.NN.barebone_model.trunk.blocks[-2].norm2,
+                         im.NN.barebone_model.trunk.blocks[-1].norm2]
+        
+        types_cam = {'GradCAM':GradCAM, 
+                    'ScoreCAM':ScoreCAM,
+                    'GradCAMPlusPlus':GradCAMPlusPlus,
+                    'AblationCAM':AblationCAM,
+                    'XGradCAM':XGradCAM,
+                    'EigenCAM':EigenCAM,
+                    'EigenGradCAM':EigenGradCAM,
+                    'LayerCAM':LayerCAM,
+                    'FullGrad':FullGrad}
 
-            result = heatmap + A.cpu()
-            result = result.div(result.max())
-            heatmap = visualize(A, cam[None, None, :, :])
+        cam = types_cam[cam_type](model=im.to('cuda'), target_layers=target_layers, reshape_transform=reshape_transform)
 
-            hm = (heatmap.squeeze().numpy().transpose(1, 2, 0))
+        images = {}
 
-            res.append(hm)
-        res = np.hstack(res)
-        return res
+        for i, angle in enumerate(['120', '240', '360']):
+
+            original_photo = Image.open(original_photo_path.replace('*', angle))
+            original_photo_full = t(original_photo)
+
+            grayscale_cam = cam(data[0][np.newaxis, :, :, :, i].to('cuda'), aug_smooth=True)
+
+            mask = np.swapaxes(np.swapaxes(grayscale_cam, 0, 1), 1, 2)
+            heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+            heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+            heatmap = np.float32(heatmap) / 255
+
+            r = v2.Resize((640, 640))
+
+            heatmap_full = r(torch.Tensor(heatmap).swapaxes(1, 2).swapaxes(0, 1))
+            p = 0.6
+            cam_ = (1 - p) * heatmap_full + p * original_photo_full
+            cam_ = cam_ / torch.max(cam_)
+            images[angle] = to_pil_image(torch.concatenate([cam_,original_photo_full], axis=2))
+
+        return images
