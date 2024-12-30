@@ -36,9 +36,71 @@ attempts at trying to solve it. In this chapter we will go over relevant work on
 
 ## 2.1 Literature review
 
-One early approach, proposed by Hays and Efros (2008), used landmark recognition in images to estimate the location of a camera. They developed a method to associate specific visual features with geographic locations, which was further improved by incorporating image matching techniques that use keypoints in images to find similarities across large datasets . FollowZhou et al. (2010) demonstrated how the spatial arrangement of visual features in images could be used for accurate geolocation, even when faced with challenging urban environments .
+One early approach, proposed by Hays and Efros (2008), used landmark recognition in images to estimate the location of a camera. They developed a method to associate specific visual features with geographic locations, which was further improved by incorporating image matching techniques that use keypoints in images to find similarities across large datasets. For features extracted for the algorithm one can distinguish line features, Gist Descriptors and Geometric Context, later on autors used Nearest Neighbors algoritms achiving up to 16% of accuracy understood as whether real location lies within 200km of best estimate.
 
-*Google St, launched in 2007, has provided a rich source of geospatial imagery that has since been widely studied for geolocation purposes. One notable approach is the use of image-to-map matching algorithms, where streetview images are compared to a geographic database to estimate location. Keller et al. (2013) proposed a method for matching panoramic streetview images to 3D maps to determine location with high precision, showcasing how geospatial data and image data can be integrated effectively . More recent developments deep learning techniques to automate the process of visual feature extraction and matching, further improving the accuracy and scalability of these systems .
+Further projects include usage of Deep Neural Networks, mailny in CNN configuration, Theethira and Ravindranath (2020) developed a CNN/LSTM model whose goal was to predict one of the 243 USA grid cells, they used 29160 pictures / 9720 locations as each location are 3 120 degree photos. There were 2 models tested, one with pretrained ResNet model and one with trained ResNet model, neither of them performed siginificantly well with best model consisting of pretrained ResNet achieved average error of 1900 kilometers. For reasons of such pure performance authors considered short model training (only 20 epochs).
+
+There were also few proposed solutions published on Github like Stelath (2022) who trained model with 50k photos and also based on ResNet again not achiving any significanly good accuracy.
+
+Most recent and most successfull solution was proposed by Haas, Skreta, Alberti and Finn (2024) with their remarkably good paper called "PIGEON". In their work authors leveraged CLIP feature extractor, introudced new loss function which's goal was to emulate regression like information transfer between different classes of categorical classifier. Autors used 400k photos from all around the world (100k locations, each described by 4 90degree photo). Their acheieved accuracy was 91.96% on country level prediction and 251.6 km mean error.
+
+## 2.2 Data description
+
+For purpose of model developemnt multiple datasets were gathered including photo database, regional GDP data and meteorological data.
+
+### 2.2.1 Administrative bounding data
+
+In order to define bounding areas as well as to allow assignment of each sampled point to its corresponding 'subregion'. Nomenclature of territorial units for statistics - NUTS classification was selected as proper clustering engine. Modelling level, previously called subregion is NUTS 3 level classification. It consists of 1165 regions carefully defined in order to allow for framing of UE regional policies and carrying out socio-econmic analyses of the regions. Therefore each region can be treated as somehow homogenous.
+
+### 2.2.2 Street View data wrangling
+
+Street View data had been gathered with usage of Google Street View Static API, such API allows to download closest image to provided geographical coordinates, its functionality supports size up to 640x640 and FOV up to 120 degrees, almost all availible points have availible full panorama.
+
+Areas valid for sampling were defined as those covered by NUTS dataset, namely those countries are:
+
+AT
+BE
+BG
+CY
+CZ
+DE
+DK
+EE
+EL
+ES
+FI
+FR
+HR
+HU
+IE
+IT
+LT
+LU
+LV
+MT
+NL
+PL
+PT
+RO
+SE
+SI
+SK
+
+
+Before sampling points and download them via API there was a process to generate sampling density, for best quality of infered information sampling density shouldn't be uniform. Such apporach has 2 main limitations;
+
+1. Majority of teritory of Europe are actually rural areas without any significant learnable beta (features) for model to train on. Best case scenario would be to have some sort of 50:50 split between rural and urban areas.
+2. Not in every country coverage of streetview is equall, there are many countries with scathered coverage like Germany, Serbia, Albania etc, for such countries uniform sampling density wouldn't work as they would be highly underepresented.
+
+The resulting soution will consist of 2 steps:
+
+1. Uniform load with each country selection probability being proportional to it's size in comparison to Europe (all sampled regions).
+2. Uniform load from areas marked as 'Urban Morphological Zones' from European Enviromental Agency with each country selection probability being proportional to it's size in comparison to Europe (all sampled regions).
+
+
+
+
+
 
 ```{python}
 print('dupa')
